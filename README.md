@@ -114,7 +114,7 @@ graph TD
     
     subgraph Camada de Rede
         AXIOS -.-> SW[MSW v2 Service Worker]
-        SIO -.-> MSW_SIO[@mswjs/socket.io-binding]
+        SIO -.-> MSW_SIO["@mswjs/socket.io-binding"]
     end
     
     subgraph Simulação & Persistência
