@@ -1,0 +1,59 @@
+{
+  "name": "nft-marketplace",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
+    "test:e2e": "playwright test",
+    "audit:lh": "lhci autorun",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^6.0.2",
+    "@radix-ui/react-dialog": "^1.3.1",
+    "@radix-ui/react-slot": "^1.5.0",
+    "@tanstack/react-query": "^5.105.0",
+    "@tanstack/react-router": "^1.170.46",
+    "autoprefixer": "^10.6.2",
+    "axios": "^1.21.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.63.0",
+    "postcss": "^8.5.32",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-hook-form": "^7.91.0",
+    "socket.io-client": "^4.8.4",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^3.4.17",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@lhci/cli": "^0.15.1",
+    "@mswjs/socket.io-binding": "^0.2.0",
+    "@playwright/test": "^1.64.1",
+    "@tanstack/router-plugin": "^1.168.48",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "msw": "^3.0.3",
+    "oxlint": "^1.89.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.5"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  }
+}
