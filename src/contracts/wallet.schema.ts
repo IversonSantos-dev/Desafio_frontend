@@ -43,6 +43,10 @@ export const UpdateWalletInputSchema = z.object({
   referralCode: z.string().optional(),
   email: z.string().email().optional(),
   ensName: z.string().optional(),
+  address: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, 'Endereço hexadecimal de carteira inválido (0x...)')
+    .optional(),
   type: WalletTypeSchema.optional(),
   network: WalletNetworkSchema.optional(),
   isConnected: z.boolean().optional(),

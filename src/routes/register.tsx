@@ -96,13 +96,15 @@ function RegisterComponent() {
               id="name"
               type="text"
               aria-label="Nome de usuário"
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? 'name-error' : undefined}
               autoComplete="name"
               placeholder="Nome de usuário"
               className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-4 py-3 text-xs text-white outline-none transition-colors placeholder:text-[#8C7A6B] focus:border-[#D28A4C]"
               {...register('name')}
             />
             {errors.name && (
-              <span className="mt-1 block text-left text-[11px] text-destructive">
+              <span id="name-error" role="alert" className="mt-1 block text-left text-[11px] text-destructive">
                 {errors.name.message}
               </span>
             )}
@@ -117,13 +119,15 @@ function RegisterComponent() {
               id="email"
               type="email"
               aria-label="Digite seu e-mail"
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? 'register-email-error' : undefined}
               autoComplete="email"
               placeholder="Digite seu e-mail"
               className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-4 py-3 text-xs text-white outline-none transition-colors placeholder:text-[#8C7A6B] focus:border-[#D28A4C]"
               {...register('email')}
             />
             {errors.email && (
-              <span className="mt-1 block text-left text-[11px] text-destructive">
+              <span id="register-email-error" role="alert" className="mt-1 block text-left text-[11px] text-destructive">
                 {errors.email.message}
               </span>
             )}
@@ -139,6 +143,8 @@ function RegisterComponent() {
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 aria-label="Senha"
+                aria-invalid={!!errors.password}
+                aria-describedby={errors.password ? 'register-password-error' : undefined}
                 autoComplete="new-password"
                 placeholder="Senha"
                 className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-4 py-3 pr-11 text-xs text-white outline-none transition-colors placeholder:text-[#8C7A6B] focus:border-[#D28A4C]"
@@ -147,14 +153,14 @@ function RegisterComponent() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'Ocultar código' : 'Mostrar código'}
+                aria-label={showPassword ? 'Ocultar caracteres' : 'Exibir caracteres'}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8C7A6B] transition-colors hover:text-[#D28A4C]"
               >
                 {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </button>
             </div>
             {errors.password && (
-              <span className="mt-1 block text-left text-[11px] text-destructive">
+              <span id="register-password-error" role="alert" className="mt-1 block text-left text-[11px] text-destructive">
                 {errors.password.message}
               </span>
             )}
@@ -170,6 +176,8 @@ function RegisterComponent() {
                 id="confirmPassword"
                 type={showConfirmPassword ? 'text' : 'password'}
                 aria-label="Confirmar senha"
+                aria-invalid={!!errors.confirmPassword}
+                aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
                 autoComplete="new-password"
                 placeholder="Confirmar senha"
                 className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-4 py-3 pr-11 text-xs text-white outline-none transition-colors placeholder:text-[#8C7A6B] focus:border-[#D28A4C]"
@@ -178,14 +186,14 @@ function RegisterComponent() {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                aria-label={showConfirmPassword ? 'Ocultar código' : 'Mostrar código'}
+                aria-label={showConfirmPassword ? 'Ocultar confirmação' : 'Exibir confirmação'}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8C7A6B] transition-colors hover:text-[#D28A4C]"
               >
                 {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </button>
             </div>
             {errors.confirmPassword && (
-              <span className="mt-1 block text-left text-[11px] text-destructive">
+              <span id="confirm-password-error" role="alert" className="mt-1 block text-left text-[11px] text-destructive">
                 {errors.confirmPassword.message}
               </span>
             )}

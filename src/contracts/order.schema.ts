@@ -13,7 +13,7 @@ export const OrderItemSnapshotSchema = z.object({
 })
 
 export const CreateOrderInputSchema = z.object({
-  idempotencyKey: z.string().min(1, 'Chave de idempotência obrigatória'),
+  idempotencyKey: z.string().optional(),
   walletAddress: z.string().min(10, 'Endereço de carteira inválido'),
   network: z.enum(['Ethereum', 'Polygon']),
   items: z

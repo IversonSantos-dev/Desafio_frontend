@@ -37,10 +37,20 @@ function LoginComponent() {
     },
   })
 
+  const getDestination = () => {
+    if (redirect) return redirect
+    const saved = sessionStorage.getItem('nft_market_session_resume')
+    if (saved) {
+      sessionStorage.removeItem('nft_market_session_resume')
+      return saved
+    }
+    return '/'
+  }
+
   const onSubmit = async (data: LoginCredentials) => {
     try {
       await login(data)
-      void navigate({ to: redirect || '/' })
+      void navigate({ to: getDestination() })
     } catch {
       // Notificado via toast no AuthContext
     }
@@ -50,7 +60,7 @@ function LoginComponent() {
     setIsSocialLoading(provider)
     try {
       await loginWithSocial(provider)
-      void navigate({ to: redirect || '/' })
+      void navigate({ to: getDestination() })
     } catch {
       // Tratado via toast
     } finally {
@@ -110,13 +120,15 @@ function LoginComponent() {
               id="email"
               type="email"
               aria-label="E-mail"
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? 'email-error' : undefined}
               autoComplete="email"
               placeholder="contato@email.com"
               className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-4 py-3 text-xs text-white outline-none transition-colors placeholder:text-[#8C7A6B] focus:border-[#D28A4C]"
               {...register('email')}
             />
             {errors.email && (
-              <span className="mt-1 block text-left text-[11px] text-destructive">
+              <span id="email-error" role="alert" className="mt-1 block text-left text-[11px] text-destructive">
                 {errors.email.message}
               </span>
             )}
@@ -132,6 +144,8 @@ function LoginComponent() {
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 aria-label="Senha"
+                aria-invalid={!!errors.password}
+                aria-describedby={errors.password ? 'password-error' : undefined}
                 autoComplete="current-password"
                 placeholder="************"
                 className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-4 py-3 pr-11 text-xs text-white outline-none transition-colors placeholder:text-[#8C7A6B] focus:border-[#D28A4C]"
@@ -140,14 +154,14 @@ function LoginComponent() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'Ocultar código' : 'Mostrar código'}
+                aria-label={showPassword ? 'Ocultar caracteres' : 'Exibir caracteres'}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8C7A6B] transition-colors hover:text-[#D28A4C]"
               >
                 {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </button>
             </div>
             {errors.password && (
-              <span className="mt-1 block text-left text-[11px] text-destructive">
+              <span id="password-error" role="alert" className="mt-1 block text-left text-[11px] text-destructive">
                 {errors.password.message}
               </span>
             )}

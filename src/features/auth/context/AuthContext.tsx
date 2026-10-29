@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { AuthResponse, LoginCredentials, RegisterCredentials, User } from '@/contracts'
 import { api } from '@/lib/axios'
 import { queryClient } from '@/lib/query-client'
+import { resetSocketState } from '@/lib/socket-context'
 import { authApi } from '../api/auth.api'
 
 interface AuthContextType {
@@ -40,9 +41,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void initAuth()
 
     const handleSessionExpired = () => {
+      // Preserva o contexto de rota e parâmetros para retomar após reautenticação
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        sessionStorage.setItem(
+          'nft_market_session_resume',
+          window.location.pathname + window.location.search,
+        )
+      }
       localStorage.removeItem('nft_market_token')
       setUser(null)
       queryClient.clear()
+      resetSocketState()
       toast.error('Sua sessão expirou. Faça login novamente.')
     }
 
@@ -58,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('nft_market_token', res.token)
       setUser(res.user)
       queryClient.clear()
+      resetSocketState()
       toast.success(`Bem-vindo de volta, ${res.user.name}!`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Falha na autenticação'
@@ -72,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('nft_market_token', res.token)
       setUser(res.user)
       queryClient.clear()
+      resetSocketState()
       toast.success(`Conta criada com sucesso! Bem-vindo, ${res.user.name}.`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Falha no cadastro'
@@ -86,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('nft_market_token', data.token)
       setUser(data.user)
       queryClient.clear()
+      resetSocketState()
       const providerName = provider === 'google' ? 'Google' : 'Facebook'
       toast.success(`Autenticado com ${providerName}! Bem-vindo, ${data.user.name}.`)
     } catch (err) {
@@ -99,11 +111,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await authApi.logout()
     } catch {
-      // Ignora erro
+      // Ignora erro de rede em logout
     }
     localStorage.removeItem('nft_market_token')
+    sessionStorage.removeItem('nft_market_session_resume')
+    // Remove dados e sessões de checkout privados do usuário anterior
+    if (typeof window !== 'undefined') {
+      Object.keys(sessionStorage).forEach((key) => {
+        if (key.startsWith('nft_market_checkout_session_')) {
+          sessionStorage.removeItem(key)
+        }
+      })
+    }
     setUser(null)
     queryClient.clear()
+    resetSocketState()
     toast.info('Você saiu da sua conta.')
   }
 

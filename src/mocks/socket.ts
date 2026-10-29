@@ -36,6 +36,7 @@ export interface NFTUpdatedEventPayload {
 
 export interface OrderUpdatedEventPayload {
   orderId: string
+  userId?: string
   status: Order['status']
   transactionHash?: string
   rejectionReason?: string
@@ -79,12 +80,9 @@ export function broadcastOrderUpdated(
   const updatedOrder = mockDb.updateOrderStatus(orderId, status, reason)
   if (!updatedOrder) return null
 
-  if (status === 'confirmed' && !updatedOrder.transactionHash) {
-    updatedOrder.transactionHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`
-  }
-
   const payload: OrderUpdatedEventPayload = {
     orderId: updatedOrder.id,
+    userId: updatedOrder.userId,
     status: updatedOrder.status,
     transactionHash: updatedOrder.transactionHash,
     rejectionReason: updatedOrder.rejectionReason,

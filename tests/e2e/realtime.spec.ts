@@ -271,4 +271,85 @@ test.describe('10. Tempo Real (Socket.IO), Descarte de Eventos Obsoletos e Recon
     await expect(page.getByText('0.80')).toHaveCount(0)
     await expect(page.getByText('6.00').first()).toBeVisible()
   })
+
+  test('deve isolar eventos order.updated descartando eventos direcionados a outros usuários', async ({ page }) => {
+    // 1. Login com Satoshi (user_1)
+    await page.goto('/login')
+    await page.getByLabel('E-mail').fill('satoshi@nftmarket.dev')
+    await page.getByLabel('Senha').fill('password123')
+    await page.getByRole('button', { name: /Entrar na Plataforma/i }).click()
+    await expect(page).toHaveURL('/')
+
+    await page.waitForFunction(() => (window as any).__socketConnected === true, null, { timeout: 10000 })
+
+    // 2. Dispara evento order.updated cujo userId pertence à Elena (user_2)
+    await page.evaluate(async () => {
+      await fetch('/api/mock/trigger-raw-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'order.updated',
+          payload: {
+            orderId: 'ord_elena_test',
+            userId: 'user_2',
+            status: 'confirmed',
+            transactionHash: '0xElenaSecretHash',
+            version: 2,
+            updatedAt: new Date().toISOString(),
+          },
+        }),
+      })
+    })
+
+    // 3. Aguarda propagação e verifica que não afetou o estado do Satoshi
+    await page.waitForTimeout(500)
+    const pageContent = await page.content()
+    expect(pageContent).not.toContain('0xElenaSecretHash')
+  })
+
+  test('deve impedir regressão de pedido confirmado para pendente ou rejeitado via socket', async ({ page }) => {
+    // 1. Login com Satoshi
+    await page.goto('/login')
+    await page.getByLabel('E-mail').fill('satoshi@nftmarket.dev')
+    await page.getByLabel('Senha').fill('password123')
+    await page.getByRole('button', { name: /Entrar na Plataforma/i }).click()
+    await expect(page).toHaveURL('/')
+
+    // 2. Cria pedido confirmado
+    await page.goto('/nft/nft_1')
+    await page.getByRole('button', { name: /Adicionar ao Carrinho/i }).click()
+    await expect(page.getByText('NFT adicionado ao carrinho!')).toBeVisible()
+    await page.goto('/checkout')
+    await page.getByRole('button', { name: /Confirmar/i }).click()
+    await expect(page).toHaveURL(/order-confirmation\/ord_/)
+    await expect(page.getByRole('heading', { name: 'Pedido Confirmado!' })).toBeVisible()
+
+    const orderId = page.url().split('/').pop()!
+
+    await page.waitForFunction(() => (window as any).__socketConnected === true, null, { timeout: 10000 })
+
+    // 3. Tenta forçar regressão de 'confirmed' para 'pending' via raw socket
+    await page.evaluate(async (id) => {
+      await fetch('/api/mock/trigger-raw-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'order.updated',
+          payload: {
+            orderId: id,
+            userId: 'user_1',
+            status: 'pending',
+            version: 99,
+            updatedAt: new Date().toISOString(),
+          },
+        }),
+      })
+    }, orderId)
+
+    // 4. Aguarda e valida que a tela permanece 'Pedido Confirmado!' e não regrediu
+    await page.waitForTimeout(500)
+    await expect(page.getByRole('heading', { name: 'Pedido Confirmado!' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Transação Pendente/i })).toHaveCount(0)
+  })
 })
+

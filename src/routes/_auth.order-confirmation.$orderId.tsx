@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, RotateCcw, X, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useOrder } from '@/features/orders/hooks/useOrders'
+import { multiplyUnitPrice } from '@/lib/decimal'
 
 export const Route = createFileRoute('/_auth/order-confirmation/$orderId')({
   component: OrderConfirmationComponent,
@@ -74,7 +75,7 @@ function OrderConfirmationComponent() {
               <div className="flex justify-center">
                 <img
                   src="/images/thank_you_icon.png"
-                  alt="Thank You"
+                  alt="Pedido confirmado com sucesso"
                   className="h-16 w-16 object-contain"
                 />
               </div>
@@ -143,7 +144,7 @@ function OrderConfirmationComponent() {
                     <div className="flex shrink-0 items-center gap-6">
                       <span className="text-[11px] text-[#8C7A6B]">(x {item.quantity})</span>
                       <span className="text-xs font-bold text-[#D28A4C]">
-                        {(parseFloat(item.unitPriceETH) * item.quantity).toFixed(2)} ETH
+                        {multiplyUnitPrice(item.unitPriceETH, item.quantity)} ETH
                       </span>
                     </div>
                   </div>

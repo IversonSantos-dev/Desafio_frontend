@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --noEmit",
     "lint": "oxlint",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "test:e2e": "playwright test",

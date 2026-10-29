@@ -22,8 +22,13 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/features/auth/context/AuthContext'
 import { useCart, useQuote } from '@/features/cart/hooks/useCart'
+import { ordersApi } from '@/features/orders/api/orders.api'
 import { useCreateOrder } from '@/features/orders/hooks/useOrders'
 import { useAddWallet, useWallets } from '@/features/wallets/hooks/useWallets'
+import type { Quote } from '@/contracts'
+import { queryClient } from '@/lib/query-client'
+import { queryKeys } from '@/lib/query-keys'
+import { multiplyUnitPrice } from '@/lib/decimal'
 import { useSocket } from '@/lib/socket-context'
 
 export const Route = createFileRoute('/_auth/checkout')({
@@ -42,7 +47,63 @@ function CheckoutComponent() {
 
   const createOrderMutation = useCreateOrder()
   const { lastEvent } = useSocket()
-  const [idempotencyKey, setIdempotencyKey] = useState(() => `idemp_${crypto.randomUUID()}`)
+
+  const checkoutSessionKey = `nft_market_checkout_session_${user?.id || 'guest'}`
+
+  // Persiste a chave de idempotência para garantir que refresh/timeout recuperem a mesma transação
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(`nft_market_checkout_session_${user?.id || 'guest'}`)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (parsed.idempotencyKey) return parsed.idempotencyKey
+        }
+      } catch {
+        // Ignora
+      }
+    }
+    const newKey = `idemp_${crypto.randomUUID()}`
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(
+          `nft_market_checkout_session_${user?.id || 'guest'}`,
+          JSON.stringify({ idempotencyKey: newKey }),
+        )
+      } catch {
+        // Ignora
+      }
+    }
+    return newKey
+  })
+
+  // Ao montar ou reconectar, verifica se havia um pedido pendente para retomada direta
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const saved = sessionStorage.getItem(checkoutSessionKey)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.pendingOrderId) {
+          void (async () => {
+            try {
+              const order = await ordersApi.getById(parsed.pendingOrderId)
+              if (order && (order.status === 'pending' || order.status === 'confirmed')) {
+                void navigate({
+                  to: '/order-confirmation/$orderId',
+                  params: { orderId: order.id },
+                })
+              }
+            } catch {
+              sessionStorage.setItem(checkoutSessionKey, JSON.stringify({ idempotencyKey }))
+            }
+          })()
+        }
+      }
+    } catch {
+      // Ignora
+    }
+  }, [checkoutSessionKey, idempotencyKey, navigate])
 
   const [selectedWalletId, setSelectedWalletId] = useState<string>('')
   const [selectedProvider, setSelectedProvider] = useState<WalletProvider>('Coinbase Wallet')
@@ -85,7 +146,7 @@ function CheckoutComponent() {
         )
       }
     }
-  }, [lastEvent, items])
+  }, [lastEvent])
 
   const handleConfirmOrder = () => {
     if (createOrderMutation.isPending) return
@@ -107,6 +168,21 @@ function CheckoutComponent() {
       return
     }
 
+    // Registra submissão ativa com a chave de idempotência persistida
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(
+          checkoutSessionKey,
+          JSON.stringify({ idempotencyKey, status: 'submitting' }),
+        )
+      } catch {
+        // Ignora
+      }
+    }
+
+    const cachedQuote = queryClient.getQueryData<Quote>(queryKeys.cart.quote(user?.id || 'guest'))
+    const quoteVersionToSend = cachedQuote?.quoteVersion || quote?.quoteVersion || 1
+
     createOrderMutation.mutate(
       {
         idempotencyKey,
@@ -117,12 +193,25 @@ function CheckoutComponent() {
           edition: i.edition,
           quantity: i.quantity,
         })),
-        quoteVersion: quote?.quoteVersion || 1,
+        quoteVersion: quoteVersionToSend,
         couponCode: cart?.couponCode,
       },
       {
         onSuccess: (order) => {
-          setIdempotencyKey(`idemp_${crypto.randomUUID()}`)
+          if (order.status === 'pending') {
+            try {
+              sessionStorage.setItem(
+                checkoutSessionKey,
+                JSON.stringify({ idempotencyKey, pendingOrderId: order.id, status: 'pending' }),
+              )
+            } catch {
+              // Ignora
+            }
+          } else {
+            sessionStorage.removeItem(checkoutSessionKey)
+            const nextKey = `idemp_${crypto.randomUUID()}`
+            setIdempotencyKey(nextKey)
+          }
           void navigate({
             to: '/order-confirmation/$orderId',
             params: { orderId: order.id },
@@ -243,7 +332,8 @@ function CheckoutComponent() {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
+                  await queryClient.refetchQueries({ queryKey: ['cart', 'quote'] })
                   setHasPriceChangedAlert(false)
                   toast.success('Nova cotação aceita. Você já pode confirmar a compra.')
                 }}
@@ -521,8 +611,7 @@ function CheckoutComponent() {
                       </div>
                     </div>
                     <span className="shrink-0 font-bold text-[#D28A4C]">
-                      {(parseFloat(item.nft.price || item.unitPrice) * item.quantity).toFixed(2)}{' '}
-                      ETH
+                      {multiplyUnitPrice(item.nft.price || item.unitPrice, item.quantity)} ETH
                     </span>
                   </div>
                 ))}

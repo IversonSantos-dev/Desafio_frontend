@@ -21,6 +21,7 @@ import {
   useUpdateCartQuantity,
 } from '@/features/cart/hooks/useCart'
 import { useNFTList } from '@/features/nfts/hooks/useNFTs'
+import { multiplyUnitPrice } from '@/lib/decimal'
 
 export const Route = createFileRoute('/cart')({
   component: CartComponent,
@@ -140,7 +141,7 @@ function CartComponent() {
               <div className="space-y-3">
                 {items.map((item) => {
                   const currentNFTPrice = item.nft?.price || item.unitPrice
-                  const itemTotal = (parseFloat(currentNFTPrice) * item.quantity).toFixed(2)
+                  const itemTotal = multiplyUnitPrice(currentNFTPrice, item.quantity)
 
                   return (
                     <div

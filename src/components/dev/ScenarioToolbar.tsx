@@ -12,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { decimalAdd } from '@/lib/decimal'
 import { mockDb } from '@/mocks/db'
 import { broadcastNFTUpdated, broadcastOrderUpdated } from '@/mocks/socket'
 
@@ -82,8 +83,7 @@ export function ScenarioToolbar() {
   const handleSimulatePriceChange = () => {
     const nft = mockDb.getNFTById(selectedNftId)
     if (!nft) return
-    const currentPrice = parseFloat(nft.price)
-    const newPrice = (currentPrice + 0.25).toFixed(2)
+    const newPrice = decimalAdd(nft.price, '0.25')
     broadcastNFTUpdated(nft.id, { price: newPrice })
     toast.warning(`[Socket.IO] Preço de "${nft.title}" alterado para ${newPrice} ETH`)
   }

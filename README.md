@@ -6,10 +6,10 @@
 ![TanStack Router](https://img.shields.io/badge/TanStack_Router-1.170-ff4154?style=for-the-badge&logo=tanstack&logoColor=white)
 ![TanStack Query](https://img.shields.io/badge/TanStack_Query-5.105-ff4154?style=for-the-badge&logo=reactquery&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38bdf8?style=for-the-badge&logo=tailwindcss&logoColor=white)
-![Playwright](https://img.shields.io/badge/Playwright-141_Passed-2e8b57?style=for-the-badge&logo=playwright&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-165_Passed-2e8b57?style=for-the-badge&logo=playwright&logoColor=white)
 ![WCAG](https://img.shields.io/badge/WCAG_2.1-AA_Compliant-blueviolet?style=for-the-badge)
 
-Solução completa e de nível sênior para o desafio frontend **NFT Marketplace**, desenvolvida com **React 19**, **TypeScript** e **Vite**, reproduzindo com **fidelidade pixel-perfect** todas as telas, componentes e interações do protótipo no Figma (Desktop e Mobile), sustentada por uma arquitetura resiliente com **TanStack Router**, **TanStack Query v5**, **MSW v2**, **Socket.IO** em tempo real e suíte de **141 testes automatizados Playwright**.
+Solução completa e de nível sênior para o desafio frontend **NFT Marketplace**, desenvolvida com **React 19**, **TypeScript** e **Vite**, reproduzindo com **fidelidade pixel-perfect** todas as telas, componentes e interações do protótipo no Figma (Desktop e Mobile), sustentada por uma arquitetura resiliente com **TanStack Router**, **TanStack Query v5**, **MSW v2**, **Socket.IO** em tempo real, **aritmética decimal BigInt (18 decimais)** e suíte de **165 testes automatizados Playwright** (100% aprovados).
 
 🔗 **Repositório Oficial**: [https://github.com/IversonSantos-dev/Desafio_frontend](https://github.com/IversonSantos-dev/Desafio_frontend)
 
@@ -35,12 +35,15 @@ Solução completa e de nível sênior para o desafio frontend **NFT Marketplace
 ## 🌟 Destaques da Solução
 
 - **🎨 100% de Fidelidade Visual ao Figma**: Reprodução exata de todos os frames (Desktop 1440px, Tablet 768px e Mobile 390px), tipografia monoespaçada Web3, paleta de cores temática (`#140D0A`, acentos `#D28A4C`), espaçamentos e micro-interações.
+- **🔢 Aritmética Decimal Exata com BigInt (18 Decimais)**: Módulo nativo (`src/lib/decimal.ts`) que elimina totalmente o uso de `parseFloat` ou `Number` em cálculos monetários de ETH, espelhando a escala *Wei* da EVM e prevenindo imprecisões de ponto flutuante.
 - **⚡ Roteamento Seguro e Tipado**: TanStack Router com validação de parâmetros de busca via **Zod**, lazy-loading por rota e sincronização com histórico (back/forward).
 - **🔄 Gestão de Estado Remoto e Cache Inteligente**: TanStack Query v5 configurado com `staleTime`, deduplicação de requisições, invalidação granular e **atualizações otimistas com rollback** em caso de falha.
-- **📡 Tempo Real Realístico (Socket.IO)**: Simulação real através do `@mswjs/socket.io-binding`, tratando eventos `nft.updated` e `order.updated` com controle de versão, tolerância a desordem, descarte de eventos obsoletos e reconciliação pós-reconexão.
-- **🛡️ Idempotência e Confiabilidade no Checkout**: Prevenção de cobrança dupla via chaves de idempotência (`crypto.randomUUID()`), bloqueio de duplo clique e alerta em tempo real de alteração de cotação.
+- **📡 Tempo Real Realístico (Socket.IO)**: Simulação real através do `@mswjs/socket.io-binding`, tratando eventos `nft.updated` e `order.updated` com controle de versão, tolerância a desordem, descarte de eventos obsoletos, isolamento por usuário e reconciliação pós-reconexão.
+- **🛡️ Idempotência e Confiabilidade no Checkout**: Prevenção de cobrança dupla via chaves de idempotência e hash de compra determinístico, bloqueio de duplo clique e alerta em tempo real de alteração de cotação.
+- **🔒 Segurança de Sessão e Isolamento**: Simulação de hashing Argon2id sem senhas em texto puro, expiração de sessão com código 401, retomada pós-login via search param `redirect` e proteção `403 Forbidden` no acesso a pedidos alheios.
+- **📦 Ciclo de Reserva de Estoque**: Pedidos em status `pending` reservam imediatamente as edições do catálogo sem esvaziar o carrinho; pedidos `confirmed` realizam o commit final debitando o carrinho; pedidos `rejected` liberam o estoque reservado.
 - **♿ Acessibilidade WCAG 2.1 AA**: Navegação 100% por teclado, foco visível, aprisionamento de foco (*focus trap*) em modais com fechamento por Escape, leitor de tela (ARIA labels e roles) e suporte a movimento reduzido (`prefers-reduced-motion`).
-- **🧪 141 Testes E2E Automatizados**: Cobertura exaustiva de todos os 12 cenários obrigatórios e testes de regressão visual com Playwright.
+- **🧪 165 Testes E2E Automatizados**: Cobertura exaustiva de todos os cenários obrigatórios e testes de regressão visual com Playwright nas 3 resoluções (Desktop, Tablet e Mobile).
 
 ---
 
@@ -74,11 +77,12 @@ Acesse a aplicação no navegador em: **[http://localhost:5173](http://localhost
 | Comando | Descrição |
 |---|---|
 | `pnpm dev` | Inicia o servidor de desenvolvimento local no Vite |
+| `pnpm typecheck` | Executa checagem de tipos estrita do TypeScript (`tsc -b --noEmit`) sem emitir arquivos |
 | `pnpm build` | Compila o TypeScript (`tsc -b`) e gera o bundle de produção otimizado com code-splitting |
 | `pnpm preview` | Executa o servidor de preview do build de produção |
 | `pnpm lint` | Executa o linter ultra-rápido Oxlint |
 | `pnpm format` | Formata o código com Prettier e ordenação de classes Tailwind |
-| `pnpm test:e2e` | Executa a suíte completa de **141 testes E2E** no Playwright (Desktop, Tablet e Mobile) |
+| `pnpm test:e2e` | Executa a suíte completa de **165 testes E2E** no Playwright (Desktop, Tablet e Mobile) |
 | `pnpm audit:lh` | Executa auditoria automatizada do Lighthouse CI |
 
 ---
@@ -208,6 +212,9 @@ Para facilitar a avaliação da banca examinadora e dos desenvolvedores, há um 
   - `Disparar order.updated`: Confirma ou recusa um pedido pendente via WebSocket.
 - **Reset Database**: Restaura integralmente o banco mock para o estado inicial determinístico.
 
+### Desativação do MSW em Produção / Homologação
+O mock pode ser desativado sem alterar código através da variável de ambiente `VITE_ENABLE_MSW=false` no arquivo `.env` ou definindo `window.__DISABLE_MSW__ = true` no navegador. Quando desativado, o Service Worker não é iniciado e o Axios encaminha as requisições diretamente à API remota.
+
 ---
 
 ## ♿ Acessibilidade (WCAG 2.1 AA) e UX
@@ -222,7 +229,7 @@ Para facilitar a avaliação da banca examinadora e dos desenvolvedores, há um 
 
 ## 🧪 Suíte de Testes Automatizados (Playwright)
 
-A aplicação conta com **141 testes E2E automatizados** divididos entre 3 viewports:
+A aplicação conta com **165 testes E2E automatizados** divididos entre 3 viewports:
 - **Desktop**: 1440 × 900 px
 - **Tablet**: 768 × 1024 px
 - **Mobile**: 390 × 844 px

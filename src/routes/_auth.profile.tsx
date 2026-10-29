@@ -490,6 +490,9 @@ function ProfileComponent() {
                     <input
                       id="currentPassword"
                       type={showCurrentPassword ? 'text' : 'password'}
+                      aria-label="Senha atual"
+                      aria-invalid={!!passwordErrors.currentPassword}
+                      aria-describedby={passwordErrors.currentPassword ? 'current-password-error' : undefined}
                       placeholder="••••••••"
                       className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-3.5 py-2.5 pr-10 text-xs text-white outline-none focus:border-[#D28A4C]"
                       {...registerPassword('currentPassword')}
@@ -497,6 +500,7 @@ function ProfileComponent() {
                     <button
                       type="button"
                       onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      aria-label={showCurrentPassword ? 'Ocultar senha atual' : 'Mostrar senha atual'}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C7A6B] hover:text-white"
                     >
                       {showCurrentPassword ? (
@@ -507,7 +511,7 @@ function ProfileComponent() {
                     </button>
                   </div>
                   {passwordErrors.currentPassword && (
-                    <span className="mt-1 block text-[11px] text-destructive">
+                    <span id="current-password-error" role="alert" className="mt-1 block text-[11px] text-destructive">
                       {passwordErrors.currentPassword.message}
                     </span>
                   )}
@@ -522,6 +526,9 @@ function ProfileComponent() {
                     <input
                       id="newPassword"
                       type={showNewPassword ? 'text' : 'password'}
+                      aria-label="Nova senha"
+                      aria-invalid={!!passwordErrors.newPassword}
+                      aria-describedby={passwordErrors.newPassword ? 'new-password-error' : undefined}
                       placeholder="••••••••"
                       className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-3.5 py-2.5 pr-10 text-xs text-white outline-none focus:border-[#D28A4C]"
                       {...registerPassword('newPassword')}
@@ -529,6 +536,7 @@ function ProfileComponent() {
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
+                      aria-label={showNewPassword ? 'Ocultar nova senha' : 'Mostrar nova senha'}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C7A6B] hover:text-white"
                     >
                       {showNewPassword ? (
@@ -539,7 +547,7 @@ function ProfileComponent() {
                     </button>
                   </div>
                   {passwordErrors.newPassword && (
-                    <span className="mt-1 block text-[11px] text-destructive">
+                    <span id="new-password-error" role="alert" className="mt-1 block text-[11px] text-destructive">
                       {passwordErrors.newPassword.message}
                     </span>
                   )}
@@ -554,6 +562,9 @@ function ProfileComponent() {
                     <input
                       id="confirmNewPassword"
                       type={showConfirmPassword ? 'text' : 'password'}
+                      aria-label="Confirmar nova senha"
+                      aria-invalid={!!passwordErrors.confirmNewPassword}
+                      aria-describedby={passwordErrors.confirmNewPassword ? 'confirm-new-password-error' : undefined}
                       placeholder="••••••••"
                       className="w-full rounded-xl border border-[#35201A] bg-[#140D0A] px-3.5 py-2.5 pr-10 text-xs text-white outline-none focus:border-[#D28A4C]"
                       {...registerPassword('confirmNewPassword')}
@@ -561,6 +572,7 @@ function ProfileComponent() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Ocultar confirmação de nova senha' : 'Mostrar confirmação de nova senha'}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C7A6B] hover:text-white"
                     >
                       {showConfirmPassword ? (
@@ -571,7 +583,7 @@ function ProfileComponent() {
                     </button>
                   </div>
                   {passwordErrors.confirmNewPassword && (
-                    <span className="mt-1 block text-[11px] text-destructive">
+                    <span id="confirm-new-password-error" role="alert" className="mt-1 block text-[11px] text-destructive">
                       {passwordErrors.confirmNewPassword.message}
                     </span>
                   )}

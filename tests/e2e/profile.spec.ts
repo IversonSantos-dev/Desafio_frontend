@@ -105,4 +105,25 @@ test.describe('8. Edição de Perfil, Senha e Carteiras (Cenário 8)', () => {
     await expect(page.getByText('Dados da carteira atualizados com sucesso!')).toBeVisible()
     await expect(page.getByText('MetaMask Atualizada 2026')).toBeVisible()
   })
+
+  test('deve testar a página /wallets, espelhar a carteira principal ao marcar "Igual à carteira principal" e exibir feedback em links decorativos', async ({ page }) => {
+    await page.goto('/wallets')
+    await expect(page.getByRole('heading', { name: /Carteira principal/i })).toBeVisible()
+
+    // 1. Marca checkbox "Igual à carteira principal"
+    const checkbox = page.locator('#same-as-primary')
+    await expect(checkbox).toBeVisible()
+    await checkbox.check()
+
+    // 2. Verifica se a carteira secundária foi espelhada
+    await expect(page.getByText('0x71C84013063A40e53aA52CE0a524D4BEB11438aC').first()).toBeVisible()
+
+    // 3. Testa links decorativos / não implementados (exibe toast informativo e badge Demo)
+    const atividadeBtn = page.getByRole('button', { name: /Atividade/i }).first()
+    if (await atividadeBtn.isVisible()) {
+      await atividadeBtn.click()
+      await expect(page.getByText(/Demonstração:/i).first()).toBeVisible()
+    }
+  })
 })
+

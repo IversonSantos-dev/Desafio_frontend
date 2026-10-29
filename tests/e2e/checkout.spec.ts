@@ -96,6 +96,7 @@ test.describe('6. Checkout, Idempotência e Confirmação de Pedido', () => {
 
     // 1. Verifica que o alerta de recálculo da cotação é exibido
     await expect(page.getByText(/A cotação foi recalculada na rede/i)).toBeVisible()
+    await expect(page.getByText(/Novo Total:/i)).toBeVisible()
 
     // 2. Verifica que a confirmação está impedida (botão desabilitado) conforme README Seção 7 item 4
     const confirmButton = page.getByRole('button', { name: /Confirmar/i })
@@ -183,4 +184,124 @@ test.describe('6. Checkout, Idempotência e Confirmação de Pedido', () => {
     expect(result3.status).toBe(409)
     expect(result3.data.message).toMatch(/Conflito de idempotência/i)
   })
+
+  test('deve reter itens no carrinho durante status pending (reserva de estoque) e remover apenas após confirmação', async ({ page }) => {
+    // 1. Ativa cenário de pedido pendente
+    await page.evaluate(async () => {
+      await fetch('/api/mock/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulatePendingOrder: true }),
+      })
+    })
+
+    // 2. Conclui checkout
+    await page.goto('/checkout')
+    await page.getByRole('button', { name: /Confirmar/i }).click()
+
+    // 3. Redireciona para confirmação e exibe status Pendente
+    await expect(page).toHaveURL(/order-confirmation\/ord_/)
+    await expect(page.getByRole('heading', { name: /Transação Pendente/i })).toBeVisible()
+
+    // 4. Conforme requisito: itens são retidos no carrinho durante pending (apenas estoque é reservado)
+    await page.goto('/cart')
+    await expect(page.getByText('Cyber Samurai #001')).toBeVisible()
+
+    // 5. Simula confirmação da transação na rede
+    await page.evaluate(async () => {
+      await fetch('/api/mock/trigger-order-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'confirmed' }),
+      })
+    })
+
+    // 6. Após confirmação definitiva, os itens comprados são removidos do carrinho
+    await page.goto('/cart')
+    await expect(page.getByText(/Seu carrinho está vazio/i)).toBeVisible()
+
+    // Restaura cenário
+    await page.evaluate(async () => {
+      await fetch('/api/mock/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulatePendingOrder: false }),
+      })
+    })
+  })
+
+  test('deve liberar a reserva de estoque quando o pedido pendente for rejeitado', async ({ page }) => {
+    // 1. Obtém estoque inicial
+    const initialEditions = await page.evaluate(async () => {
+      const res = await fetch('/api/nfts/nft_1')
+      const data = await res.json()
+      return data.availableEditions
+    })
+
+    // 2. Ativa cenário de pedido pendente
+    await page.evaluate(async () => {
+      await fetch('/api/mock/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulatePendingOrder: true }),
+      })
+    })
+
+    // 3. Conclui checkout gerando pedido pendente
+    await page.goto('/checkout')
+    await page.getByRole('button', { name: /Confirmar/i }).click()
+    await expect(page).toHaveURL(/order-confirmation\/ord_/)
+
+    // 4. Verifica que o estoque disponível foi decrementado pela reserva
+    const reservedEditions = await page.evaluate(async () => {
+      const res = await fetch('/api/nfts/nft_1')
+      const data = await res.json()
+      return data.availableEditions
+    })
+    expect(reservedEditions).toBe(initialEditions - 1)
+
+    // 5. Rejeita o pedido simulando erro na blockchain
+    await page.evaluate(async () => {
+      await fetch('/api/mock/trigger-order-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected', reason: 'Transação rejeitada pela rede' }),
+      })
+    })
+
+    // 6. Verifica que o estoque reservado foi devolvido integralmente
+    const restoredEditions = await page.evaluate(async () => {
+      const res = await fetch('/api/nfts/nft_1')
+      const data = await res.json()
+      return data.availableEditions
+    })
+    expect(restoredEditions).toBe(initialEditions)
+
+    // Restaura cenário
+    await page.evaluate(async () => {
+      await fetch('/api/mock/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulatePendingOrder: false }),
+      })
+    })
+  })
+
+  test('deve calcular valores monetários com exatidão decimal BigInt sem imprecisões de ponto flutuante', async ({ page }) => {
+    await page.goto('/cart')
+
+    // Aplica cupom de 10%
+    await page.getByPlaceholder(/Código promocional/i).fill('DESAFIO10')
+    await page.getByRole('button', { name: /Aplicar/i }).click()
+    await expect(page.getByText('DESAFIO10')).toBeVisible()
+
+    // Verifica que não há dízimas ou erros de ponto flutuante (ex: 0.30000000000000004)
+    const content = await page.content()
+    expect(content).not.toMatch(/000000000\d/)
+    expect(content).not.toMatch(/999999999\d/)
+
+    // Verifica presença da taxa fixa exata de gas de rede 0.0025 ETH
+    await expect(page.getByText('0.0025 ETH')).toBeVisible()
+  })
 })
+

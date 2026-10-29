@@ -154,4 +154,105 @@ test.describe('3. Autenticação, Sessão, Logout e Expiração', () => {
     await expect(page).toHaveURL('/')
     await expect(page.getByRole('link', { name: /Satoshi Nakamoto/i }).first()).toBeVisible()
   })
+
+  test('deve proteger a rota GET /api/orders/:id com HTTP 403 quando um usuário tenta acessar pedido de outro usuário', async ({ page }) => {
+    // 1. Login como Satoshi e cria um pedido
+    await page.goto('/login')
+    await page.getByRole('button', { name: /Satoshi N\./i }).click()
+    await page.getByRole('button', { name: /Entrar na Plataforma/i }).click()
+    await expect(page).toHaveURL('/')
+
+    await page.goto('/nft/nft_1')
+    await page.getByRole('button', { name: /Adicionar ao Carrinho/i }).click()
+    await expect(page.getByText('NFT adicionado ao carrinho!')).toBeVisible()
+    await page.goto('/checkout')
+    await page.getByRole('button', { name: /Confirmar/i }).click()
+    await expect(page).toHaveURL(/order-confirmation\/ord_/)
+
+    // Extrai o orderId da URL
+    const url = page.url()
+    const orderId = url.split('/').pop()!
+    expect(orderId).toMatch(/^ord_/)
+
+    // 2. Consulta o pedido com o token de Satoshi (deve retornar 200)
+    const satoshiRes = await page.evaluate(async (id) => {
+      const res = await fetch(`/api/orders/${id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('nft_market_token')}`,
+        },
+      })
+      return { status: res.status }
+    }, orderId)
+    expect(satoshiRes.status).toBe(200)
+
+    // 3. Obtém token de Elena Rostova
+    const elenaToken = await page.evaluate(async () => {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'elena@nftmarket.dev', password: 'password123' }),
+      })
+      const data = await res.json()
+      return data.token
+    })
+
+    // 4. Elena tenta acessar o pedido de Satoshi: deve retornar HTTP 403 Forbidden
+    const elenaRes = await page.evaluate(async ({ id, token }) => {
+      const res = await fetch(`/api/orders/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      return { status: res.status, data: await res.json() }
+    }, { id: orderId, token: elenaToken })
+
+    expect(elenaRes.status).toBe(403)
+    expect(elenaRes.data.message).toMatch(/Acesso negado/i)
+  })
+
+  test('deve salvar contexto de redirecionamento na expiração de sessão e retomar para a tela de checkout após novo login', async ({ page }) => {
+    // 1. Login com Satoshi
+    await page.goto('/login')
+    await page.getByRole('button', { name: /Satoshi N\./i }).click()
+    await page.getByRole('button', { name: /Entrar na Plataforma/i }).click()
+    await expect(page).toHaveURL('/')
+
+    // 2. Adiciona item e vai para o checkout
+    await page.goto('/nft/nft_1')
+    await page.getByRole('button', { name: /Adicionar ao Carrinho/i }).click()
+    await expect(page.getByText('NFT adicionado ao carrinho!')).toBeVisible()
+    await page.goto('/checkout')
+    await expect(page.getByRole('heading', { name: /Pagamento/i })).toBeVisible()
+
+    // 3. Simula expiração de sessão com HTTP 401
+    await page.evaluate(async () => {
+      await fetch('/api/mock/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceStatus: 401 }),
+      })
+    })
+
+    // 4. Tenta carregar dados ou recarrega: sessão expira
+    await page.reload()
+    await expect(page.getByText(/Sua sessão expirou/i).first()).toBeVisible()
+    await expect(page).toHaveURL(/\/login/)
+
+    // Desativa status de erro 401
+    await page.evaluate(async () => {
+      await fetch('/api/mock/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceStatus: null }),
+      })
+    })
+
+    // 5. Faz login novamente: deve retomar para /checkout
+    await page.getByRole('button', { name: /Satoshi N\./i }).click()
+    await page.getByRole('button', { name: /Entrar na Plataforma/i }).click()
+
+    await expect(page).toHaveURL(/\/checkout/)
+    await expect(page.getByRole('heading', { name: /Pagamento/i })).toBeVisible()
+  })
 })
+

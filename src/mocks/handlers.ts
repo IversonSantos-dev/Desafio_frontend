@@ -1,27 +1,112 @@
 import { delay, http, HttpResponse } from 'msw'
-import type {
-  CartItem,
-  CreateOrderInput,
-  LoginCredentials,
-  RegisterCredentials,
-  User,
+import {
+  CreateOrderInputSchema,
+  CreateWalletInputSchema,
+  LoginCredentialsSchema,
+  RegisterCredentialsSchema,
+  UpdateWalletInputSchema,
+  type CartItem,
+  type User,
 } from '@/contracts'
+import { decimalAdd, decimalCompare } from '@/lib/decimal'
 import { mockDb } from './db'
+import { mockHashPassword, verifyMockPassword, type MockUserAccount } from './fixtures/users'
 import { broadcastNFTUpdated, broadcastOrderUpdated, emitRawSocketEvent } from './socket'
 
-// Helper para obter userId a partir do token no header Authorization
-function getUserIdFromAuth(request: Request): string | null {
-  const authHeader = request.headers.get('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) return null
-  const token = authHeader.replace('Bearer ', '').trim()
-  if (!token) return null
+interface SessionValidation {
+  userId: string | null
+  user: MockUserAccount | null
+  errorResponse: Response | null
+}
 
-  // Token format: "mock-token-{userId}-{timestamp}"
+// Helper para validar token e expiração de sessão em requisições protegidas
+function validateSession(request: Request): SessionValidation {
+  const scenario = mockDb.getScenario()
+  if (scenario.sessionExpired) {
+    return {
+      userId: null,
+      user: null,
+      errorResponse: HttpResponse.json(
+        { message: 'Sessão expirada. Faça login novamente.', code: 'SESSION_EXPIRED' },
+        { status: 401 },
+      ),
+    }
+  }
+
+  const authHeader = request.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return {
+      userId: null,
+      user: null,
+      errorResponse: HttpResponse.json(
+        { message: 'Autenticação necessária.', code: 'UNAUTHORIZED' },
+        { status: 401 },
+      ),
+    }
+  }
+
+  const token = authHeader.replace('Bearer ', '').trim()
+  if (!token) {
+    return {
+      userId: null,
+      user: null,
+      errorResponse: HttpResponse.json(
+        { message: 'Token de autenticação não fornecido.', code: 'UNAUTHORIZED' },
+        { status: 401 },
+      ),
+    }
+  }
+
+  // Token format: "mock-token-{userId}-{issuedAt}-{expiresAt}" ou "mock-token-{userId}-{timestamp}"
   const parts = token.split('-')
   if (parts.length >= 3 && parts[0] === 'mock' && parts[1] === 'token') {
-    return parts[2]
+    const userId = parts[2]
+    if (parts.length >= 5) {
+      const expiresAt = Number(parts[4])
+      if (!isNaN(expiresAt) && Date.now() > expiresAt) {
+        return {
+          userId: null,
+          user: null,
+          errorResponse: HttpResponse.json(
+            { message: 'Sessão expirada. Faça login novamente.', code: 'SESSION_EXPIRED' },
+            { status: 401 },
+          ),
+        }
+      }
+    }
+
+    const user = mockDb.getState().users.find((u) => u.id === userId) || null
+    if (!user) {
+      return {
+        userId: null,
+        user: null,
+        errorResponse: HttpResponse.json(
+          { message: 'Usuário não encontrado.', code: 'USER_NOT_FOUND' },
+          { status: 401 },
+        ),
+      }
+    }
+
+    return {
+      userId,
+      user,
+      errorResponse: null,
+    }
   }
-  return null
+
+  return {
+    userId: null,
+    user: null,
+    errorResponse: HttpResponse.json(
+      { message: 'Token de autenticação inválido.', code: 'INVALID_TOKEN' },
+      { status: 401 },
+    ),
+  }
+}
+
+function getOptionalUserId(request: Request): string {
+  const session = validateSession(request)
+  return session.userId || 'guest'
 }
 
 // Middleware de cenário MSW (latência e injeção de falhas)
@@ -52,19 +137,30 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const body = (await request.json()) as LoginCredentials
+    const rawBody = await request.json().catch(() => null)
+    const parseResult = LoginCredentialsSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return HttpResponse.json(
+        { message: 'Credenciais inválidas.', errors: parseResult.error.flatten() },
+        { status: 400 },
+      )
+    }
+
+    const body = parseResult.data
     const users = mockDb.getState().users
     const user = users.find((u) => u.email.toLowerCase() === body.email.toLowerCase())
 
-    if (!user || user.passwordHash !== body.password) {
+    if (!user || !verifyMockPassword(body.password, user.passwordHash)) {
       return HttpResponse.json(
         { message: 'Credenciais inválidas. Verifique seu e-mail e senha.' },
         { status: 401 },
       )
     }
 
-    const token = `mock-token-${user.id}-${Date.now()}`
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const issuedAt = Date.now()
+    const expiresAt = issuedAt + 24 * 60 * 60 * 1000
+    const token = `mock-token-${user.id}-${issuedAt}-${expiresAt}`
+    const expiresAtIso = new Date(expiresAt).toISOString()
 
     // Ao autenticar, mescla carrinho e favoritos de visitante se houver
     mockDb.mergeGuestCartIntoUser(user.id)
@@ -80,7 +176,7 @@ export const handlers = [
         createdAt: user.createdAt,
       },
       token,
-      expiresAt,
+      expiresAt: expiresAtIso,
     })
   }),
 
@@ -88,7 +184,16 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const body = (await request.json()) as RegisterCredentials
+    const rawBody = await request.json().catch(() => null)
+    const parseResult = RegisterCredentialsSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return HttpResponse.json(
+        { message: 'Dados de cadastro inválidos.', errors: parseResult.error.flatten() },
+        { status: 400 },
+      )
+    }
+
+    const body = parseResult.data
     const users = mockDb.getState().users
     const existing = users.find((u) => u.email.toLowerCase() === body.email.toLowerCase())
 
@@ -108,9 +213,10 @@ export const handlers = [
       createdAt: new Date().toISOString(),
     }
 
+    // Não armazena senha em claro nem atribui plain text ao passwordHash
     mockDb.getState().users.push({
       ...newUser,
-      passwordHash: body.password,
+      passwordHash: mockHashPassword(body.password),
       wallets: [],
     })
 
@@ -136,14 +242,16 @@ export const handlers = [
     mockDb.mergeGuestCartIntoUser(newUser.id)
     mockDb.mergeGuestFavoritesIntoUser(newUser.id)
 
-    const token = `mock-token-${newUser.id}-${Date.now()}`
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const issuedAt = Date.now()
+    const expiresAt = issuedAt + 24 * 60 * 60 * 1000
+    const token = `mock-token-${newUser.id}-${issuedAt}-${expiresAt}`
+    const expiresAtIso = new Date(expiresAt).toISOString()
 
     return HttpResponse.json(
       {
         user: newUser,
         token,
-        expiresAt,
+        expiresAt: expiresAtIso,
       },
       { status: 201 },
     )
@@ -154,7 +262,7 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const body = (await request.json()) as { provider: 'google' | 'facebook' }
+    const body = (await request.json().catch(() => ({}))) as { provider?: 'google' | 'facebook' }
     const provider = body.provider || 'google'
 
     const email =
@@ -175,7 +283,7 @@ export const handlers = [
         avatar,
         bio: `Colecionador autenticado via ${provider.toUpperCase()}.`,
         createdAt: new Date().toISOString(),
-        passwordHash: 'social_login',
+        passwordHash: mockHashPassword(`social_oauth_${provider}`),
         wallets: [],
       }
       mockDb.getState().users.push(user)
@@ -200,8 +308,10 @@ export const handlers = [
     mockDb.mergeGuestFavoritesIntoUser(user.id)
     mockDb.save()
 
-    const token = `mock-token-${user.id}-${Date.now()}`
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const issuedAt = Date.now()
+    const expiresAt = issuedAt + 24 * 60 * 60 * 1000
+    const token = `mock-token-${user.id}-${issuedAt}-${expiresAt}`
+    const expiresAtIso = new Date(expiresAt).toISOString()
 
     return HttpResponse.json({
       user: {
@@ -213,7 +323,7 @@ export const handlers = [
         createdAt: user.createdAt,
       },
       token,
-      expiresAt,
+      expiresAt: expiresAtIso,
     })
   }),
 
@@ -221,23 +331,16 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Sessão inválida ou expirada.' }, { status: 401 })
-    }
-
-    const user = mockDb.getState().users.find((u) => u.id === userId)
-    if (!user) {
-      return HttpResponse.json({ message: 'Usuário não encontrado.' }, { status: 404 })
-    }
+    const { user, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     return HttpResponse.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      bio: user.bio,
-      createdAt: user.createdAt,
+      id: user!.id,
+      name: user!.name,
+      email: user!.email,
+      avatar: user!.avatar,
+      bio: user!.bio,
+      createdAt: user!.createdAt,
     })
   }),
 
@@ -252,18 +355,19 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Sessão expirada.' }, { status: 401 })
+    const { user, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
+
+    const body = (await request.json().catch(() => ({}))) as {
+      currentPassword?: string
+      newPassword?: string
     }
 
-    const body = (await request.json()) as { currentPassword?: string; newPassword?: string }
-    const user = mockDb.getState().users.find((u) => u.id === userId)
-    if (!user || user.passwordHash !== body.currentPassword) {
+    if (!user || !verifyMockPassword(body.currentPassword || '', user.passwordHash)) {
       return HttpResponse.json({ message: 'Senha atual incorreta.' }, { status: 400 })
     }
 
-    user.passwordHash = body.newPassword || ''
+    user.passwordHash = mockHashPassword(body.newPassword || '')
     mockDb.save()
 
     return HttpResponse.json({ success: true })
@@ -307,23 +411,21 @@ export const handlers = [
       items = items.filter((nft) => nft.rarity.toLowerCase() === rarity.toLowerCase())
     }
 
-    // Filtro por preço
+    // Filtro por preço com aritmética decimal exata
     if (minPrice) {
-      const min = parseFloat(minPrice)
-      items = items.filter((nft) => parseFloat(nft.price) >= min)
+      items = items.filter((nft) => decimalCompare(nft.price, minPrice) >= 0)
     }
     if (maxPrice) {
-      const max = parseFloat(maxPrice)
-      items = items.filter((nft) => parseFloat(nft.price) <= max)
+      items = items.filter((nft) => decimalCompare(nft.price, maxPrice) <= 0)
     }
 
-    // Ordenação com precisão numérica de ETH
+    // Ordenação com precisão decimal de ETH
     items.sort((a, b) => {
       if (sort === 'price_asc') {
-        return parseFloat(a.price) - parseFloat(b.price)
+        return decimalCompare(a.price, b.price)
       }
       if (sort === 'price_desc') {
-        return parseFloat(b.price) - parseFloat(a.price)
+        return decimalCompare(b.price, a.price)
       }
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
@@ -355,33 +457,60 @@ export const handlers = [
   }),
 
   // --- FAVORITOS (Suporta visitantes e colecionadores autenticados) ---
-  http.get('/api/favorites', async ({ request }) => {
-    const scenarioError = await applyScenario()
-    if (scenarioError) return scenarioError
-
-    const userId = getUserIdFromAuth(request) || 'guest'
-    return HttpResponse.json(mockDb.getFavorites(userId))
-  }),
-
   http.get('/api/favorites/details', async ({ request }) => {
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
-    const favIds = mockDb.getFavorites(userId)
-    const nfts = mockDb.getNFTs().filter((n) => favIds.includes(n.id))
-    return HttpResponse.json(nfts)
+    const userId = getOptionalUserId(request)
+    const favoriteIds = mockDb.getFavorites(userId)
+    const allNfts = mockDb.getNFTs()
+    const favoriteNFTs = favoriteIds
+      .map((id) => allNfts.find((n) => n.id === id))
+      .filter((n): n is NonNullable<typeof n> => !!n)
+
+    return HttpResponse.json(favoriteNFTs)
+  }),
+
+  http.get('/api/favorites', async ({ request }) => {
+    const scenarioError = await applyScenario()
+    if (scenarioError) return scenarioError
+
+    const userId = getOptionalUserId(request)
+    const favoriteIds = mockDb.getFavorites(userId)
+    return HttpResponse.json(favoriteIds)
+  }),
+
+  http.post('/api/favorites/toggle', async ({ request }) => {
+    const scenarioError = await applyScenario()
+    if (scenarioError) return scenarioError
+
+    const userId = getOptionalUserId(request)
+    const body = (await request.json().catch(() => ({}))) as { nftId?: string }
+    const nftId = body.nftId
+
+    if (!nftId) {
+      return HttpResponse.json({ message: 'ID do NFT é obrigatório.' }, { status: 400 })
+    }
+
+    const nft = mockDb.getNFTById(nftId)
+    if (!nft) {
+      return HttpResponse.json({ message: 'NFT não encontrado.' }, { status: 404 })
+    }
+
+    const isFavorite = mockDb.toggleFavorite(userId, nftId)
+    return HttpResponse.json({ nftId, isFavorite })
   }),
 
   http.post('/api/favorites/:id', async ({ request, params }) => {
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
+    const userId = getOptionalUserId(request)
     const nftId = params.id as string
+
     const nft = mockDb.getNFTById(nftId)
     if (!nft) {
-      return HttpResponse.json({ message: 'NFT inexistente.' }, { status: 404 })
+      return HttpResponse.json({ message: 'NFT não encontrado.' }, { status: 404 })
     }
 
     const isFavorite = mockDb.toggleFavorite(userId, nftId)
@@ -393,53 +522,86 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
-    return HttpResponse.json(mockDb.getCart(userId))
+    const userId = getOptionalUserId(request)
+    const cart = mockDb.getCart(userId)
+
+    const populatedItems = cart.items.map((item) => {
+      const nft = mockDb.getNFTById(item.nftId)
+      return {
+        ...item,
+        nft: nft || {
+          id: item.nftId,
+          title: 'NFT Desconhecido',
+          price: item.unitPrice,
+          image: '',
+          collection: '',
+          availableEditions: 0,
+          totalEditions: 0,
+          rarity: 'Comum' as const,
+          description: '',
+          creator: { name: 'Desconhecido', avatar: '', address: '0x0' },
+          network: 'Ethereum' as const,
+          contractAddress: '0x0',
+          tokenId: '0',
+          tokenStandard: 'ERC-721' as const,
+          createdAt: new Date().toISOString(),
+          version: 1,
+        },
+      }
+    })
+
+    return HttpResponse.json({
+      ...cart,
+      items: populatedItems,
+    })
   }),
 
   http.post('/api/cart/items', async ({ request }) => {
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
-    const body = (await request.json()) as { nftId: string; edition?: number; quantity?: number }
-    const nft = mockDb.getNFTById(body.nftId)
+    const userId = getOptionalUserId(request)
+    const body = (await request.json().catch(() => ({}))) as {
+      nftId?: string
+      quantity?: number
+      edition?: number
+    }
 
+    if (!body.nftId) {
+      return HttpResponse.json({ message: 'ID do NFT é obrigatório.' }, { status: 400 })
+    }
+
+    const nft = mockDb.getNFTById(body.nftId)
     if (!nft) {
       return HttpResponse.json({ message: 'NFT não encontrado.' }, { status: 404 })
     }
 
-    if (nft.availableEditions <= 0) {
-      return HttpResponse.json({ message: 'Esta edição já está esgotada.' }, { status: 409 })
+    const qty = Math.max(1, body.quantity || 1)
+    if (nft.availableEditions < qty) {
+      return HttpResponse.json(
+        { message: `Estoque insuficiente. Restam apenas ${nft.availableEditions} edições.` },
+        { status: 409 },
+      )
     }
 
     const cart = mockDb.getCart(userId)
     const edition = body.edition || 1
-    const quantityToAdd = Math.max(1, body.quantity || 1)
+    const existing = cart.items.find((i) => i.nftId === body.nftId && i.edition === edition)
 
-    const existingIndex = cart.items.findIndex(
-      (i) => i.nftId === body.nftId && i.edition === edition,
-    )
-
-    if (existingIndex >= 0) {
-      const newTotal = cart.items[existingIndex].quantity + quantityToAdd
-      if (newTotal > nft.availableEditions) {
+    if (existing) {
+      if (existing.quantity + qty > nft.availableEditions) {
         return HttpResponse.json(
-          {
-            message: `Limite excedido. Restam apenas ${nft.availableEditions} edições disponíveis.`,
-          },
-          { status: 400 },
+          { message: `Limite de edições excedido para este NFT.` },
+          { status: 409 },
         )
       }
-      cart.items[existingIndex].quantity = newTotal
-      cart.items[existingIndex].unitPrice = nft.price
-      cart.items[existingIndex].nft = nft
+      existing.quantity += qty
     } else {
       const newItem: CartItem = {
-        id: `cart_item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: `ci_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         nftId: nft.id,
         edition,
-        quantity: quantityToAdd,
+        quantity: qty,
         unitPrice: nft.price,
         nft,
       }
@@ -447,62 +609,99 @@ export const handlers = [
     }
 
     mockDb.setCart(userId, cart)
-    return HttpResponse.json(cart)
+    const quote = mockDb.calculateQuote(userId)
+
+    return HttpResponse.json({ cart, quote }, { status: 201 })
   }),
 
   http.patch('/api/cart/items/:id', async ({ request, params }) => {
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
-    const body = (await request.json()) as { quantity: number }
-    const cart = mockDb.getCart(userId)
-    const item = cart.items.find((i) => i.id === params.id)
+    const userId = getOptionalUserId(request)
+    const body = (await request.json().catch(() => ({}))) as { quantity?: number; edition?: number }
+    const nftId = params.id as string
+    const edition = body.edition || 1
+    const quantity = Math.max(0, body.quantity !== undefined ? body.quantity : 1)
 
-    if (!item) {
+    const cart = mockDb.getCart(userId)
+    const itemIndex = cart.items.findIndex((i) => i.nftId === nftId && i.edition === edition)
+
+    if (itemIndex === -1) {
       return HttpResponse.json({ message: 'Item não encontrado no carrinho.' }, { status: 404 })
     }
 
-    const nft = mockDb.getNFTById(item.nftId)
-    if (nft && body.quantity > nft.availableEditions) {
-      return HttpResponse.json(
-        { message: `Quantidade indisponível. Estoque máximo: ${nft.availableEditions}.` },
-        { status: 400 },
-      )
+    if (quantity === 0) {
+      cart.items.splice(itemIndex, 1)
+    } else {
+      const nft = mockDb.getNFTById(nftId)
+      if (nft && nft.availableEditions < quantity) {
+        return HttpResponse.json(
+          { message: `Estoque insuficiente. Restam apenas ${nft.availableEditions} edições.` },
+          { status: 409 },
+        )
+      }
+      cart.items[itemIndex].quantity = quantity
     }
 
-    item.quantity = Math.max(1, body.quantity)
     mockDb.setCart(userId, cart)
-    return HttpResponse.json(cart)
+    const quote = mockDb.calculateQuote(userId)
+
+    return HttpResponse.json({ cart, quote })
   }),
 
   http.delete('/api/cart/items/:id', async ({ request, params }) => {
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
+    const userId = getOptionalUserId(request)
+    const url = new URL(request.url)
+    const editionParam = url.searchParams.get('edition')
+    const edition = editionParam ? parseInt(editionParam, 10) : null
+    const nftId = params.id as string
+
     const cart = mockDb.getCart(userId)
-    cart.items = cart.items.filter((i) => i.id !== params.id)
+    cart.items = cart.items.filter((i) => {
+      if (i.nftId !== nftId) return true
+      if (edition !== null && i.edition !== edition) return true
+      return false
+    })
+
+    if (cart.items.length === 0) {
+      cart.couponCode = null
+    }
+
     mockDb.setCart(userId, cart)
-    return HttpResponse.json(cart)
+    const quote = mockDb.calculateQuote(userId)
+
+    return HttpResponse.json({ cart, quote })
   }),
 
   http.post('/api/cart/coupon', async ({ request }) => {
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
-    const body = (await request.json()) as { code: string }
+    const userId = getOptionalUserId(request)
+    const body = (await request.json().catch(() => ({}))) as { code?: string }
     const code = (body.code || '').trim().toUpperCase()
 
-    const coupon = mockDb.getState().coupons.find((c) => c.code.toUpperCase() === code)
+    if (!code) {
+      return HttpResponse.json({ message: 'Código do cupom é obrigatório.' }, { status: 400 })
+    }
+
+    const coupons = mockDb.getState().coupons
+    const coupon = coupons.find((c) => c.code.toUpperCase() === code)
+
     if (!coupon) {
-      return HttpResponse.json({ message: 'Cupom de desconto inválido.' }, { status: 404 })
+      return HttpResponse.json(
+        { message: 'Cupom não encontrado. Verifique o código digitado.' },
+        { status: 404 },
+      )
     }
 
     if (!coupon.active || new Date(coupon.expiresAt) <= new Date()) {
       return HttpResponse.json(
-        { message: 'Este cupom de desconto está expirado.' },
+        { message: 'Este cupom de desconto está expirado ou foi desativado.' },
         { status: 400 },
       )
     }
@@ -519,7 +718,7 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
+    const userId = getOptionalUserId(request)
     const cart = mockDb.getCart(userId)
     cart.couponCode = null
     mockDb.setCart(userId, cart)
@@ -532,22 +731,17 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request) || 'guest'
+    const userId = getOptionalUserId(request)
     return HttpResponse.json(mockDb.calculateQuote(userId))
   }),
 
-  // --- PEDIDOS COM IDEMPOTÊNCIA ---
+  // --- PEDIDOS COM IDEMPOTÊNCIA E CICLO DE RESERVA/COMMIT ---
   http.post('/api/orders', async ({ request }) => {
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json(
-        { message: 'Autenticação necessária para finalizar o pedido.' },
-        { status: 401 },
-      )
-    }
+    const { userId, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     const idempotencyKey = request.headers.get('Idempotency-Key') || ''
     if (!idempotencyKey) {
@@ -557,8 +751,31 @@ export const handlers = [
       )
     }
 
-    const body = (await request.json()) as CreateOrderInput
-    const payloadHash = JSON.stringify({ items: body.items, wallet: body.walletAddress })
+    const rawBody = await request.json().catch(() => null)
+    const parseResult = CreateOrderInputSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return HttpResponse.json(
+        {
+          message: 'Dados do pedido inválidos.',
+          errors: parseResult.error.flatten(),
+        },
+        { status: 400 },
+      )
+    }
+    const body = parseResult.data
+
+    // Normaliza os dados completos que definem a compra para garantia estrita de idempotência
+    const normalizedItems = [...body.items]
+      .map((i) => ({ nftId: i.nftId, edition: i.edition, quantity: i.quantity }))
+      .sort((a, b) => a.nftId.localeCompare(b.nftId) || a.edition - b.edition)
+
+    const payloadHash = JSON.stringify({
+      items: normalizedItems,
+      wallet: body.walletAddress.toLowerCase().trim(),
+      network: body.network,
+      couponCode: body.couponCode ? body.couponCode.toUpperCase().trim() : null,
+      quoteVersion: body.quoteVersion,
+    })
 
     // Validação de idempotência:
     const existingOrder = mockDb.getOrderByIdempotencyKey(idempotencyKey)
@@ -568,13 +785,12 @@ export const handlers = [
         return HttpResponse.json(
           {
             message:
-              'Conflito de idempotência: a chave fornecida já foi utilizada com dados diferentes.',
+              'Conflito de idempotência: a chave fornecida já foi utilizada com dados diferentes da compra.',
           },
           { status: 409 },
         )
       }
-      // Retorna o pedido previamente gerado
-      return HttpResponse.json(existingOrder)
+      return HttpResponse.json(existingOrder, { status: 200 })
     }
 
     // Injeção de cenário: falha de pedido forçada
@@ -605,7 +821,7 @@ export const handlers = [
     }
 
     // Revalidar cotação e versão contra preços atualizados em tempo real
-    const currentQuote = mockDb.calculateQuote(userId)
+    const currentQuote = mockDb.calculateQuote(userId!)
     if (body.quoteVersion && body.quoteVersion < currentQuote.quoteVersion) {
       return HttpResponse.json(
         {
@@ -616,10 +832,7 @@ export const handlers = [
       )
     }
 
-    // Calcula cotação final congelada
-    const quote = currentQuote
-
-    // Monta snapshot dos itens
+    // Monta snapshot imutável dos itens e valores congelados
     const snapshots = body.items.map((i) => {
       const nft = mockDb.getNFTById(i.nftId)!
       return {
@@ -638,13 +851,14 @@ export const handlers = [
     const order = {
       id: orderId,
       idempotencyKey,
-      userId,
+      userId: userId!,
       status: (isPending ? 'pending' : 'confirmed') as 'pending' | 'confirmed',
       items: snapshots,
-      subtotalETH: quote.subtotalETH,
-      discountETH: quote.discountETH,
-      networkFeeETH: quote.networkFeeETH,
-      totalETH: quote.totalETH,
+      subtotalETH: currentQuote.subtotalETH,
+      discountETH: currentQuote.discountETH,
+      networkFeeETH: currentQuote.networkFeeETH,
+      totalETH: currentQuote.totalETH,
+      coupon: currentQuote.coupon,
       walletAddress: body.walletAddress,
       network: body.network,
       transactionHash: isPending
@@ -657,22 +871,14 @@ export const handlers = [
 
     mockDb.saveOrder(order, idempotencyKey, payloadHash)
 
-    // Abate o estoque dos NFTs comprados
-    body.items.forEach((item) => {
-      const nft = mockDb.getNFTById(item.nftId)
-      if (nft) {
-        mockDb.updateNFT(nft.id, {
-          availableEditions: Math.max(0, nft.availableEditions - item.quantity),
-        })
-      }
-    })
-
-    // Limpa apenas os itens comprados do carrinho
-    const cart = mockDb.getCart(userId)
-    const boughtKeys = new Set(body.items.map((i) => `${i.nftId}-${i.edition}`))
-    cart.items = cart.items.filter((i) => !boughtKeys.has(`${i.nftId}-${i.edition}`))
-    if (cart.items.length === 0) cart.couponCode = null
-    mockDb.setCart(userId, cart)
+    if (isPending) {
+      // Pedido PENDENTE: Reserva o estoque, NÃO remove itens do carrinho nem debita definitivamente
+      mockDb.reserveStock(orderId, body.items)
+    } else {
+      // Pedido CONFIRMADO: Debita o estoque e remove apenas as quantidades efetivamente compradas
+      mockDb.reserveStock(orderId, body.items)
+      mockDb.commitOrder(orderId, userId!)
+    }
 
     return HttpResponse.json(order, { status: 201 })
   }),
@@ -681,14 +887,20 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
+    const { userId, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     const order = mockDb.getOrder(params.id as string)
     if (!order) {
       return HttpResponse.json({ message: 'Pedido não encontrado.' }, { status: 404 })
+    }
+
+    // Garante isolamento estrito: só retorna pedido se pertencer ao colecionador autenticado
+    if (order.userId !== userId) {
+      return HttpResponse.json(
+        { message: 'Acesso negado: você não tem permissão para visualizar este pedido.' },
+        { status: 403 },
+      )
     }
 
     return HttpResponse.json(order)
@@ -698,10 +910,8 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
+    const { userId, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     const myOrders = mockDb.getState().orders.filter((o) => o.userId === userId)
     return HttpResponse.json(myOrders)
@@ -712,23 +922,16 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
-
-    const user = mockDb.getState().users.find((u) => u.id === userId)
-    if (!user) {
-      return HttpResponse.json({ message: 'Usuário não encontrado.' }, { status: 404 })
-    }
+    const { user, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     return HttpResponse.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      bio: user.bio,
-      createdAt: user.createdAt,
+      id: user!.id,
+      name: user!.name,
+      email: user!.email,
+      avatar: user!.avatar,
+      bio: user!.bio,
+      createdAt: user!.createdAt,
     })
   }),
 
@@ -736,29 +939,22 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
+    const { user, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
-    const body = (await request.json()) as Partial<User>
-    const user = mockDb.getState().users.find((u) => u.id === userId)
-    if (!user) {
-      return HttpResponse.json({ message: 'Usuário não encontrado.' }, { status: 404 })
-    }
-
-    if (body.name) user.name = body.name
-    if (body.bio !== undefined) user.bio = body.bio
-    if (body.avatar) user.avatar = body.avatar
+    const body = (await request.json().catch(() => ({}))) as Partial<User>
+    if (body.name) user!.name = body.name
+    if (body.bio !== undefined) user!.bio = body.bio
+    if (body.avatar) user!.avatar = body.avatar
     mockDb.save()
 
     return HttpResponse.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      bio: user.bio,
-      createdAt: user.createdAt,
+      id: user!.id,
+      name: user!.name,
+      email: user!.email,
+      avatar: user!.avatar,
+      bio: user!.bio,
+      createdAt: user!.createdAt,
     })
   }),
 
@@ -767,10 +963,8 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
+    const { userId, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     const wallets = mockDb.getState().wallets.filter((w) => w.userId === userId)
     return HttpResponse.json(wallets)
@@ -780,21 +974,18 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
+    const { userId, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
-    const body = (await request.json()) as {
-      address: string
-      network: 'Ethereum' | 'Polygon'
-      type: 'primary' | 'secondary'
-      label: string
-      profileName: string
-      referralCode?: string
-      email: string
-      ensName?: string
+    const rawBody = await request.json().catch(() => null)
+    const parseResult = CreateWalletInputSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return HttpResponse.json(
+        { message: 'Dados da carteira inválidos.', errors: parseResult.error.flatten() },
+        { status: 400 },
+      )
     }
+    const body = parseResult.data
 
     // Se a nova carteira for 'primary', desmarca a anterior
     if (body.type === 'primary') {
@@ -807,7 +998,7 @@ export const handlers = [
 
     const newWallet = {
       id: `wallet_${Date.now()}`,
-      userId,
+      userId: userId!,
       address: body.address,
       network: body.network,
       type: body.type,
@@ -830,17 +1021,18 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
+    const { userId, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     const wallet = mockDb.getState().wallets.find((w) => w.id === params.id && w.userId === userId)
     if (!wallet) {
       return HttpResponse.json({ message: 'Carteira não encontrada.' }, { status: 404 })
     }
 
-    const body = (await request.json()) as Partial<typeof wallet>
+    const rawBody = await request.json().catch(() => ({}))
+    const parseResult = UpdateWalletInputSchema.safeParse(rawBody)
+    const body = parseResult.success ? parseResult.data : (rawBody as Partial<typeof wallet>)
+
     if (body.type === 'primary') {
       mockDb.getState().wallets.forEach((w) => {
         if (w.userId === userId && w.id !== wallet.id && w.type === 'primary') {
@@ -858,7 +1050,8 @@ export const handlers = [
     if (body.email !== undefined) wallet.email = body.email
     if (body.ensName !== undefined) wallet.ensName = body.ensName
     if (body.network !== undefined) wallet.network = body.network
-    if (body.isConnected !== undefined) wallet.isConnected = body.isConnected
+    if ('address' in body && body.address) wallet.address = body.address as string
+    if ('isConnected' in body && body.isConnected !== undefined) wallet.isConnected = Boolean(body.isConnected)
     mockDb.save()
 
     return HttpResponse.json(wallet)
@@ -868,10 +1061,8 @@ export const handlers = [
     const scenarioError = await applyScenario()
     if (scenarioError) return scenarioError
 
-    const userId = getUserIdFromAuth(request)
-    if (!userId) {
-      return HttpResponse.json({ message: 'Autenticação necessária.' }, { status: 401 })
-    }
+    const { userId, errorResponse } = validateSession(request)
+    if (errorResponse) return errorResponse
 
     mockDb.getState().wallets = mockDb
       .getState()
@@ -904,8 +1095,8 @@ export const handlers = [
     if (!nft) {
       return HttpResponse.json({ message: 'NFT não encontrado' }, { status: 404 })
     }
-    const currentPrice = parseFloat(nft.price)
-    const newPrice = body.price || (currentPrice + 0.25).toFixed(2)
+    const currentPrice = nft.price
+    const newPrice = body.price || decimalAdd(currentPrice, '0.25')
     const newEditions =
       body.availableEditions !== undefined ? body.availableEditions : nft.availableEditions
 

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import type { Cart, NFT, NFTListResponse, Order } from '@/contracts'
+import { useAuth } from '@/features/auth/context/AuthContext'
 import { queryClient } from '@/lib/query-client'
 import { queryKeys } from '@/lib/query-keys'
 import type { NFTUpdatedEventPayload, OrderUpdatedEventPayload } from '@/mocks/socket'
@@ -21,6 +22,11 @@ let globalSocket: Socket | null = null
 const highestNFTVersions = new Map<string, number>()
 const highestOrderVersions = new Map<string, number>()
 
+export function resetSocketState(): void {
+  highestNFTVersions.clear()
+  highestOrderVersions.clear()
+}
+
 function getSocket() {
   if (!globalSocket && typeof window !== 'undefined') {
     globalSocket = io(SOCKET_ORIGIN, {
@@ -36,11 +42,23 @@ function getSocket() {
 }
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  const userRef = useRef(user)
+  useEffect(() => {
+    userRef.current = user
+  }, [user])
+
   const [isConnected, setIsConnected] = useState(() => {
     const s = getSocket()
     return !!s?.connected
   })
   const [lastEvent, setLastEvent] = useState<string | null>(null)
+
+  // Ao trocar de usuário ou fazer logout, limpa versões em cache e evento ativo
+  useEffect(() => {
+    resetSocketState()
+    setLastEvent(null)
+  }, [user?.id])
 
   useEffect(() => {
     const socket = getSocket()
@@ -62,7 +80,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(window as any).__socketClient = socket
       }
-      // Reconciliação pós-reconexão com a API REST
+      // Reconciliação pós-reconexão com a API REST sem reaplicar efeitos colaterais
       void queryClient.invalidateQueries({ queryKey: ['cart'] })
       void queryClient.invalidateQueries({ queryKey: ['orders'] })
       void queryClient.invalidateQueries({ queryKey: ['nfts'] })
@@ -130,9 +148,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         currentListVersion,
       )
 
-      if (payload.version < currentVersion) {
+      // Descarta duplicatas da mesma versão e eventos antigos
+      if (payload.version <= currentVersion) {
         console.log(
-          `[Client Socket] Evento nft.updated descartado (versão ${payload.version} < atual ${currentVersion})`,
+          `[Client Socket] Evento nft.updated descartado (versão ${payload.version} <= atual ${currentVersion})`,
         )
         return
       }
@@ -143,7 +162,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       // 1. Atualiza detalhe do NFT no cache se existir
       queryClient.setQueryData<NFT>(queryKeys.nfts.detail(payload.nftId), (old) => {
         if (!old) return old
-        if (payload.version < old.version) return old
+        if (payload.version <= old.version) return old
         return {
           ...old,
           price: payload.price,
@@ -159,7 +178,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           ...old,
           items: old.items.map((item) =>
             item.id === payload.nftId
-              ? payload.version < item.version
+              ? payload.version <= item.version
                 ? item
                 : {
                     ...item,
@@ -177,7 +196,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         if (!old || !Array.isArray(old)) return old
         return old.map((item) =>
           item.id === payload.nftId
-            ? payload.version < item.version
+            ? payload.version <= item.version
               ? item
               : {
                   ...item,
@@ -196,7 +215,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         if (!hasItem) return oldCart
 
         const currentItem = oldCart.items.find((i) => i.nftId === payload.nftId)
-        if (currentItem && currentItem.nft?.version && payload.version < currentItem.nft.version) {
+        if (currentItem && currentItem.nft?.version && payload.version <= currentItem.nft.version) {
           return oldCart
         }
 
@@ -206,7 +225,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           ...oldCart,
           items: oldCart.items.map((item) =>
             item.nftId === payload.nftId
-              ? payload.version < (item.nft?.version || 0)
+              ? payload.version <= (item.nft?.version || 0)
                 ? item
                 : {
                     ...item,
@@ -228,10 +247,20 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     // Handler do evento order.updated
     const handleOrderUpdated = (payload: OrderUpdatedEventPayload) => {
-      const knownOrderVer = highestOrderVersions.get(payload.orderId) || 0
-      if (payload.version < knownOrderVer) {
+      const currentUser = userRef.current
+      // Isolamento por usuário: se o evento tiver userId e for de outro usuário, ignora
+      if (payload.userId && currentUser && payload.userId !== currentUser.id) {
         console.log(
-          `[Client Socket] Evento order.updated descartado (versão ${payload.version} < conhecida ${knownOrderVer})`,
+          `[Client Socket] Evento order.updated ignorado (pertence a ${payload.userId}, usuário ativo ${currentUser.id})`,
+        )
+        return
+      }
+
+      const knownOrderVer = highestOrderVersions.get(payload.orderId) || 0
+      // Descarta duplicatas da mesma versão e eventos antigos
+      if (payload.version <= knownOrderVer) {
+        console.log(
+          `[Client Socket] Evento order.updated descartado (versão ${payload.version} <= conhecida ${knownOrderVer})`,
         )
         return
       }
@@ -239,14 +268,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       const existingOrder = queryClient.getQueryData<Order>(
         queryKeys.orders.detail(payload.orderId),
       )
-      // Pedidos confirmados ou recusados são terminais (README seção 7)
-      if (
-        existingOrder &&
-        (existingOrder.status === 'confirmed' || existingOrder.status === 'rejected')
-      ) {
-        if (payload.status === 'pending') {
+
+      // Estados terminais (confirmed / rejected) são imutáveis:
+      // Ignora tentativas de regressão para pending ou transição entre estados terminais distintos
+      const isTerminal = (status: Order['status']) =>
+        status === 'confirmed' || status === 'rejected'
+
+      if (existingOrder && isTerminal(existingOrder.status)) {
+        if (payload.status !== existingOrder.status) {
           console.log(
-            `[Client Socket] Descartando tentativa de regressão de pedido terminal (${existingOrder.status} -> pending)`,
+            `[Client Socket] Descartando transição inválida a partir de estado terminal (${existingOrder.status} -> ${payload.status})`,
           )
           return
         }
@@ -257,11 +288,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       queryClient.setQueryData<Order>(queryKeys.orders.detail(payload.orderId), (old) => {
         if (!old) return old
-        if (payload.version < old.version) return old
-        if (
-          (old.status === 'confirmed' || old.status === 'rejected') &&
-          payload.status === 'pending'
-        ) {
+        if (payload.version <= old.version) return old
+        if (isTerminal(old.status) && payload.status !== old.status) {
           return old
         }
         return {
@@ -289,7 +317,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socket.off('nft.updated', handleNFTUpdated)
       socket.off('order.updated', handleOrderUpdated)
     }
-  }, [])
+  }, [user?.id])
 
   return (
     <SocketContext.Provider value={{ isConnected, lastEvent }}>{children}</SocketContext.Provider>
