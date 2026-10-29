@@ -10,7 +10,9 @@
     "lint": "oxlint",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "test:e2e": "playwright test",
-    "audit:lh": "lhci autorun",
+    "audit:lh": "lhci autorun --config=lighthouserc.json",
+    "audit:lh:mobile": "lhci autorun --config=lighthouserc.mobile.json",
+    "audit:lh:all": "lhci autorun --config=lighthouserc.json && lhci autorun --config=lighthouserc.mobile.json",
     "preview": "vite preview"
   },
   "dependencies": {

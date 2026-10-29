@@ -165,7 +165,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <span className="cursor-default text-[#7A6A5E]">Estúdio do criador</span>
+                <span className="cursor-default text-[#9E8C7E]">Estúdio do criador</span>
               </li>
               <li>
                 <Link to="/favorites" className="transition-colors hover:text-white">
@@ -309,7 +309,7 @@ export function Footer() {
       </div>
 
       {/* 4. COPYRIGHT BOTTOM BAR */}
-      <div className="border-t border-[#241612] py-4 text-center text-[11px] text-[#7A6A5E]">
+      <div className="border-t border-[#241612] py-4 text-center text-[11px] text-[#9E8C7E]">
         <p>© 2026 Kurio. Propriedade digital para todos.</p>
       </div>
     </footer>

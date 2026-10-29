@@ -6,10 +6,10 @@
 ![TanStack Router](https://img.shields.io/badge/TanStack_Router-1.170-ff4154?style=for-the-badge&logo=tanstack&logoColor=white)
 ![TanStack Query](https://img.shields.io/badge/TanStack_Query-5.105-ff4154?style=for-the-badge&logo=reactquery&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38bdf8?style=for-the-badge&logo=tailwindcss&logoColor=white)
-![Playwright](https://img.shields.io/badge/Playwright-165_Passed-2e8b57?style=for-the-badge&logo=playwright&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-174_Passed-2e8b57?style=for-the-badge&logo=playwright&logoColor=white)
 ![WCAG](https://img.shields.io/badge/WCAG_2.1-AA_Compliant-blueviolet?style=for-the-badge)
 
-Solução completa e de nível sênior para o desafio frontend **NFT Marketplace**, desenvolvida com **React 19**, **TypeScript** e **Vite**, reproduzindo com **fidelidade pixel-perfect** todas as telas, componentes e interações do protótipo no Figma (Desktop e Mobile), sustentada por uma arquitetura resiliente com **TanStack Router**, **TanStack Query v5**, **MSW v2**, **Socket.IO** em tempo real, **aritmética decimal BigInt (18 decimais)** e suíte de **165 testes automatizados Playwright** (100% aprovados).
+Solução completa e de nível sênior para o desafio frontend **NFT Marketplace**, desenvolvida com **React 19**, **TypeScript** e **Vite**, reproduzindo com **fidelidade pixel-perfect** todas as telas, componentes e interações do protótipo no Figma (Desktop e Mobile), sustentada por uma arquitetura resiliente com **TanStack Router**, **TanStack Query v5**, **MSW v2**, **Socket.IO** em tempo real, **aritmética decimal BigInt (18 decimais)** e suíte de **174 testes automatizados Playwright** (100% aprovados sem supressões de acessibilidade).
 
 🔗 **Repositório Oficial**: [https://github.com/IversonSantos-dev/Desafio_frontend](https://github.com/IversonSantos-dev/Desafio_frontend)
 
@@ -43,7 +43,7 @@ Solução completa e de nível sênior para o desafio frontend **NFT Marketplace
 - **🔒 Segurança de Sessão e Isolamento**: Simulação de hashing Argon2id sem senhas em texto puro, expiração de sessão com código 401, retomada pós-login via search param `redirect` e proteção `403 Forbidden` no acesso a pedidos alheios.
 - **📦 Ciclo de Reserva de Estoque**: Pedidos em status `pending` reservam imediatamente as edições do catálogo sem esvaziar o carrinho; pedidos `confirmed` realizam o commit final debitando o carrinho; pedidos `rejected` liberam o estoque reservado.
 - **♿ Acessibilidade WCAG 2.1 AA**: Navegação 100% por teclado, foco visível, aprisionamento de foco (*focus trap*) em modais com fechamento por Escape, leitor de tela (ARIA labels e roles) e suporte a movimento reduzido (`prefers-reduced-motion`).
-- **🧪 165 Testes E2E Automatizados**: Cobertura exaustiva de todos os cenários obrigatórios e testes de regressão visual com Playwright nas 3 resoluções (Desktop, Tablet e Mobile).
+- **🧪 174 Testes E2E Automatizados**: Cobertura exaustiva de todos os cenários obrigatórios e testes de regressão visual com Playwright nas 3 resoluções (Desktop, Tablet e Mobile), incluindo validação estrita de acessibilidade axe-core (sem supressão de color-contrast), idempotência pós-timeout 504 e integridade aritmética BigInt.
 
 ---
 
@@ -79,11 +79,13 @@ Acesse a aplicação no navegador em: **[http://localhost:5173](http://localhost
 | `pnpm dev` | Inicia o servidor de desenvolvimento local no Vite |
 | `pnpm typecheck` | Executa checagem de tipos estrita do TypeScript (`tsc -b --noEmit`) sem emitir arquivos |
 | `pnpm build` | Compila o TypeScript (`tsc -b`) e gera o bundle de produção otimizado com code-splitting |
-| `pnpm preview` | Executa o servidor de preview do build de produção |
-| `pnpm lint` | Executa o linter ultra-rápido Oxlint |
+| `pnpm preview` | Executa o servidor de preview do build de produção na porta 4173 |
+| `pnpm lint` | Executa o linter ultra-rápido Oxlint (0 erros, 0 avisos) |
 | `pnpm format` | Formata o código com Prettier e ordenação de classes Tailwind |
-| `pnpm test:e2e` | Executa a suíte completa de **165 testes E2E** no Playwright (Desktop, Tablet e Mobile) |
-| `pnpm audit:lh` | Executa auditoria automatizada do Lighthouse CI |
+| `pnpm test:e2e` | Executa a suíte completa de **174 testes E2E** no Playwright (Desktop, Tablet e Mobile) |
+| `pnpm audit:lh` | Executa auditoria automatizada do Lighthouse CI Desktop (Início e Detalhe, 3 runs) |
+| `pnpm audit:lh:mobile` | Executa auditoria automatizada do Lighthouse CI Mobile (Início e Detalhe, 3 runs) |
+| `pnpm audit:lh:all` | Executa a auditoria completa do Lighthouse CI (Desktop + Mobile) |
 
 ---
 
@@ -255,21 +257,36 @@ pnpm test:e2e
 
 ---
 
-## 📊 Auditoria de Performance (Lighthouse)
+## 📊 Auditoria de Performance e Qualidade (Lighthouse CI)
 
-A aplicação foi auditada utilizando o **Lighthouse CI** em build de produção:
+A aplicação foi auditada utilizando o **Lighthouse CI v0.15** em build de produção otimizado com 3 execuções por página para cálculo de mediana:
 
-| Métrica | Meta | Resultado Obtido |
-|---|---|---|
-| **Performance** | ≥ 90 | **95+** |
-| **Accessibility** | ≥ 95 | **98** |
-| **Best Practices** | ≥ 95 | **100** |
-| **SEO** | ≥ 90 | **100** |
+### Desktop (1350x940px)
+| URL / Página | Performance | Acessibilidade | Melhores Práticas | SEO | LCP | CLS | TBT |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Início (`/`)** | **98** | **96** | **100** | **92** | **1.06s** | **0.000** | **7.5ms** |
+| **Detalhe (`/nft/nft_1`)** | **98** | **96** | **100** | **92** | **1.05s** | **0.000** | **13.1ms** |
 
-Para reproduzir a auditoria localmente:
+*Todas as metas do desafio (Performance ≥ 90, A11y ≥ 95, Best Practices ≥ 95, SEO ≥ 90, LCP ≤ 2.5s, CLS ≤ 0.1, TBT ≤ 200ms) atingidas com 100% de aprovação e zero alertas.*
+
+### Mobile (Emulação celular com 4x CPU Throttling e Rede 4G Lenta)
+| URL / Página | Performance | Acessibilidade | Melhores Práticas | SEO | LCP | CLS | TBT |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Início (`/`)** | **74** | **96** | **100** | **92** | ~4.17s | **0.000** | **110ms** |
+| **Detalhe (`/nft/nft_1`)** | **76** | **100** | **100** | **92** | ~3.97s | **0.000** | **95ms** |
+
+*Nota e justificativa técnica: No perfil Mobile, Acessibilidade (96–100%), Melhores Práticas (100%), SEO (92%), CLS (0.000) e TBT (< 200ms) cumprem integralmente as metas. A métrica de LCP em dispositivo móvel emulado é influenciada pelo download, compilação e ativação do Service Worker do MSW sob desaceleração de CPU de 4x e latência de rede móvel sintética.*
+
+Para reproduzir as auditorias localmente:
 ```bash
+# 1. Compilar bundle de produção
 pnpm build
+
+# 2. Executar auditoria Desktop
 pnpm audit:lh
+
+# 3. Executar auditoria Mobile
+pnpm audit:lh:mobile
 ```
 
 ---

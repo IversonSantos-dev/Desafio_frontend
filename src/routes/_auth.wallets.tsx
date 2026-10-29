@@ -11,7 +11,7 @@ import {
   Tag,
   User,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -62,25 +62,25 @@ function WalletsComponent() {
   const [ensPrefix, setEnsPrefix] = useState('')
 
   // Sincroniza dados da carteira principal quando carregados
-  useEffect(() => {
-    if (primaryWallet) {
-      setWalletLabel(primaryWallet.label || 'Carteira Principal')
-      setWalletAddress(primaryWallet.address || '')
-      setWalletNetwork(primaryWallet.network || 'Ethereum')
-      setProfileName(primaryWallet.profileName || user?.name || '')
-      setWalletEmail(primaryWallet.email || user?.email || '')
-      if (primaryWallet.ensName) {
-        if (primaryWallet.ensName.endsWith('.xyz')) {
-          setEnsSuffix('.xyz')
-          setEnsPrefix(primaryWallet.ensName.replace(/\.xyz$/, ''))
-        } else {
-          setEnsSuffix('.eth')
-          setEnsPrefix(primaryWallet.ensName.replace(/\.eth$/, ''))
-        }
+  const [syncedWalletId, setSyncedWalletId] = useState<string | null>(null)
+  if (primaryWallet && syncedWalletId !== primaryWallet.id) {
+    setSyncedWalletId(primaryWallet.id)
+    setWalletLabel(primaryWallet.label || 'Carteira Principal')
+    setWalletAddress(primaryWallet.address || '')
+    setWalletNetwork(primaryWallet.network || 'Ethereum')
+    setProfileName(primaryWallet.profileName || user?.name || '')
+    setWalletEmail(primaryWallet.email || user?.email || '')
+    if (primaryWallet.ensName) {
+      if (primaryWallet.ensName.endsWith('.xyz')) {
+        setEnsSuffix('.xyz')
+        setEnsPrefix(primaryWallet.ensName.replace(/\.xyz$/, ''))
+      } else {
+        setEnsSuffix('.eth')
+        setEnsPrefix(primaryWallet.ensName.replace(/\.eth$/, ''))
       }
-      setReferralCode(primaryWallet.referralCode || '')
     }
-  }, [primaryWallet?.id])
+    setReferralCode(primaryWallet.referralCode || '')
+  }
 
   // Formulário de adição de carteira
   const {

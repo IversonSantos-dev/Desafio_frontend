@@ -6,7 +6,6 @@ test.describe('11. Acessibilidade (WCAG 2.1 AA), Navegação por Teclado e Foco 
     await page.goto('/')
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .disableRules(['color-contrast']) // Permite personalização temática espresso #120F0D / #C97D44
       .analyze()
 
     expect(accessibilityScanResults.violations).toEqual([])
@@ -16,7 +15,6 @@ test.describe('11. Acessibilidade (WCAG 2.1 AA), Navegação por Teclado e Foco 
     await page.goto('/nft/nft_1')
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .disableRules(['color-contrast'])
       .analyze()
 
     expect(accessibilityScanResults.violations).toEqual([])
@@ -26,7 +24,6 @@ test.describe('11. Acessibilidade (WCAG 2.1 AA), Navegação por Teclado e Foco 
     await page.goto('/cart')
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .disableRules(['color-contrast'])
       .analyze()
 
     expect(accessibilityScanResults.violations).toEqual([])
@@ -36,7 +33,6 @@ test.describe('11. Acessibilidade (WCAG 2.1 AA), Navegação por Teclado e Foco 
     await page.goto('/login')
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .disableRules(['color-contrast'])
       .analyze()
 
     expect(accessibilityScanResults.violations).toEqual([])

@@ -55,10 +55,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [lastEvent, setLastEvent] = useState<string | null>(null)
 
   // Ao trocar de usuário ou fazer logout, limpa versões em cache e evento ativo
-  useEffect(() => {
+  const [prevUserId, setPrevUserId] = useState(user?.id)
+  if (prevUserId !== user?.id) {
+    setPrevUserId(user?.id)
     resetSocketState()
     setLastEvent(null)
-  }, [user?.id])
+  }
 
   useEffect(() => {
     const socket = getSocket()

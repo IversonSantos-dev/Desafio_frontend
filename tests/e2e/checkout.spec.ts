@@ -185,6 +185,50 @@ test.describe('6. Checkout, Idempotência e Confirmação de Pedido', () => {
     expect(result3.data.message).toMatch(/Conflito de idempotência/i)
   })
 
+  test('deve simular perda ou timeout da resposta após criação no servidor e provar a retomada pela interface sem duplicar pedido', async ({ page }) => {
+    // 1. Ativa o cenário MSW: timeout após criação do pedido no servidor
+    await page.evaluate(async () => {
+      await fetch('/api/mock/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ simulateTimeoutAfterOrderCreation: true }),
+      })
+    })
+
+    // 2. Garante que está no checkout com item no carrinho
+    await page.goto('/checkout')
+    await expect(page.getByRole('heading', { name: /Pagamento/i })).toBeVisible()
+
+    // 3. Usuário clica em confirmar pedido pela primeira vez: servidor cria o pedido, mas retorna 504 timeout
+    const confirmButton = page.getByRole('button', { name: /Confirmar/i })
+    await confirmButton.click()
+
+    // 4. Interface exibe toast com o erro de timeout e permanece no checkout
+    await expect(page.getByText(/Timeout de rede/i)).toBeVisible()
+    await expect(page).toHaveURL('/checkout')
+
+    // 5. Usuário clica novamente em confirmar pela interface (retomada com a mesma chave persistida)
+    await expect(confirmButton).toBeEnabled()
+    await confirmButton.click()
+
+    // 6. Confirmação do pedido é alcançada com sucesso
+    await expect(page).toHaveURL(/order-confirmation\/ord_/)
+    await expect(page.getByRole('heading', { name: 'Pedido Confirmado!' })).toBeVisible()
+
+    // 7. Valida no servidor que existe exatamente 1 pedido criado para o usuário, sem duplicação
+    const ordersCount = await page.evaluate(async () => {
+      const res = await fetch('/api/orders', {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('nft_market_token')}`,
+        },
+      })
+      const orders = await res.json()
+      return orders.length
+    })
+
+    expect(ordersCount).toBe(1)
+  })
+
   test('deve reter itens no carrinho durante status pending (reserva de estoque) e remover apenas após confirmação', async ({ page }) => {
     // 1. Ativa cenário de pedido pendente
     await page.evaluate(async () => {

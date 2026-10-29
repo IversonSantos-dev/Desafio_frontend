@@ -56,14 +56,64 @@ function NFTDetailComponent() {
 
   if (isLoading) {
     return (
-      <div className="container py-8 font-mono">
-        <Skeleton className="mb-6 h-6 w-32 bg-[#241612]" />
-        <div className="grid gap-8 lg:grid-cols-2">
-          <Skeleton className="aspect-square w-full rounded-3xl bg-[#241612]" />
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-1/3 bg-[#241612]" />
-            <Skeleton className="h-10 w-3/4 bg-[#241612]" />
-            <Skeleton className="h-20 w-full bg-[#241612]" />
+      <div className="pb-24 font-mono text-white sm:pb-16">
+        <div className="container pt-4 sm:pt-8">
+          {/* Desktop Breadcrumb Skeleton */}
+          <div className="mb-6 hidden items-center gap-2 md:flex">
+            <Skeleton className="h-4 w-36 bg-[#241612]" />
+          </div>
+
+          {/* Grid Principal: Galeria & Detalhes */}
+          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+            {/* Lado Esquerdo: Miniaturas + Imagem Principal */}
+            <div className="flex flex-col-reverse gap-4 md:flex-row lg:col-span-6">
+              {/* 4 Miniaturas Verticais (Desktop) */}
+              <div className="hidden shrink-0 flex-col gap-3 md:flex">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-20 w-20 rounded-xl bg-[#241612]" />
+                ))}
+              </div>
+
+              {/* Imagem Principal Grande */}
+              <div className="relative aspect-square w-full rounded-3xl bg-[#241612]">
+                <Skeleton className="h-full w-full rounded-3xl bg-[#241612]" />
+              </div>
+            </div>
+
+            {/* Lado Direito: Informações e Ações de Compra */}
+            <div className="space-y-5 lg:col-span-6">
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-3/4 rounded-xl bg-[#241612]" />
+                <Skeleton className="h-8 w-1/2 rounded-xl bg-[#241612]" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-1/4 rounded bg-[#241612]" />
+                <Skeleton className="h-16 w-full rounded-xl bg-[#241612]" />
+                <Skeleton className="h-4 w-1/3 rounded bg-[#241612]" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-16 rounded bg-[#241612]" />
+                <div className="flex gap-2">
+                  {[0, 1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-7 w-16 rounded-full bg-[#241612]" />
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Skeleton className="h-10 w-28 rounded-xl bg-[#241612]" />
+                <Skeleton className="h-10 w-28 rounded-xl bg-[#241612]" />
+                <Skeleton className="h-10 w-28 rounded-xl bg-[#241612]" />
+              </div>
+              <Skeleton className="h-24 w-full rounded-xl bg-[#241612]" />
+            </div>
+          </div>
+
+          {/* Seção Tabs Skeleton */}
+          <div className="mt-16 space-y-6 border-t border-[#241612] pt-8">
+            <div className="flex gap-8 border-b border-[#241612] pb-3">
+              <Skeleton className="h-6 w-32 bg-[#241612]" />
+              <Skeleton className="h-6 w-48 bg-[#241612]" />
+            </div>
             <Skeleton className="h-32 w-full rounded-2xl bg-[#241612]" />
           </div>
         </div>
@@ -135,6 +185,7 @@ function NFTDetailComponent() {
       <div className="container flex items-center justify-between pb-2 pt-4 md:hidden">
         <Link
           to="/"
+          aria-label="Voltar ao catálogo"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1C120D] text-[#8C7A6B] hover:text-white"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -177,6 +228,7 @@ function NFTDetailComponent() {
                   key={idx}
                   type="button"
                   onClick={() => setSelectedImage(thumbSrc)}
+                  aria-label={`Visualizar miniatura ${idx + 1}`}
                   className="h-20 w-20 overflow-hidden rounded-xl border border-[#35201A] transition-colors hover:border-[#D28A4C]"
                 >
                   <img
@@ -250,7 +302,7 @@ function NFTDetailComponent() {
                     className={`rounded-full px-3.5 py-1 text-xs font-bold transition-all ${
                       selectedEditionPill === pill
                         ? 'border border-[#D28A4C] bg-[#D28A4C]/10 text-[#D28A4C]'
-                        : 'border border-[#35201A] bg-[#1C120D] text-[#8C7A6B] hover:text-white'
+                        : 'border border-[#35201A] bg-[#1C120D] text-[#9E8C7E] hover:text-white'
                     }`}
                   >
                     {pill}
@@ -311,7 +363,7 @@ function NFTDetailComponent() {
                   <button
                     type="button"
                     onClick={() => toggleFavoriteMutation.mutate(nft.id)}
-                    aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                    aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar - Adicionar aos favoritos'}
                     className={`flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-bold transition-all scroll-my-28 ${
                       isFavorite
                         ? 'border-[#D28A4C] bg-[#D28A4C]/10 text-[#D28A4C]'
@@ -349,6 +401,7 @@ function NFTDetailComponent() {
                   <button
                     type="button"
                     onClick={() => handleShare('LinkedIn')}
+                    aria-label="Compartilhar no LinkedIn"
                     className="text-[#9E8C7E] hover:text-white"
                   >
                     <LinkedinIcon className="h-4 w-4" />
@@ -356,6 +409,7 @@ function NFTDetailComponent() {
                   <button
                     type="button"
                     onClick={() => handleShare('E-mail')}
+                    aria-label="Compartilhar por e-mail"
                     className="text-[#9E8C7E] hover:text-white"
                   >
                     <Mail className="h-4 w-4" />
@@ -363,6 +417,7 @@ function NFTDetailComponent() {
                   <button
                     type="button"
                     onClick={() => handleShare('Twitter')}
+                    aria-label="Compartilhar no Twitter"
                     className="text-[#9E8C7E] hover:text-white"
                   >
                     <TwitterIcon className="h-4 w-4" />
@@ -431,17 +486,17 @@ function NFTDetailComponent() {
               {/* Grid de Atributos e Propriedades para manter conformidade total com testes */}
               {nft.traits && nft.traits.length > 0 && (
                 <div className="pt-4">
-                  <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold text-white">
+                  <h2 className="mb-3 flex items-center gap-1.5 text-xs font-bold text-white">
                     <ShieldCheck className="h-4 w-4 text-[#D28A4C]" />
                     Atributos e Propriedades
-                  </h3>
+                  </h2>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {nft.traits.map((trait, index) => (
                       <div
                         key={index}
                         className="rounded-xl border border-[#35201A] bg-[#1C120D] p-3 text-center"
                       >
-                        <span className="block text-[10px] uppercase text-[#8C7A6B]">
+                        <span className="block text-[10px] uppercase text-[#9E8C7E]">
                           {trait.trait_type}
                         </span>
                         <span className="mt-0.5 block truncate text-xs font-bold text-white">
@@ -544,7 +599,7 @@ function NFTDetailComponent() {
             aria-label="Comprar Agora"
             className="flex-1 rounded-2xl bg-[#D28A4C] py-3 text-center text-xs font-bold uppercase text-[#140D0A] shadow-md transition-transform active:scale-95 disabled:opacity-50"
           >
-            Comprar NFT
+            Comprar Agora
           </button>
           <button
             type="button"

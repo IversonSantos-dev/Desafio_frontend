@@ -123,7 +123,7 @@ export function Header() {
               className="flex items-center gap-2 rounded-xl bg-[#D28A4C] px-3.5 py-2 text-xs font-bold text-[#140D0A] shadow-md transition-all hover:bg-[#c37a3c] active:scale-95 sm:px-4"
             >
               <LogIn className="h-4 w-4 stroke-[2.5]" />
-              <span>Entrar</span>
+              <span>Conectar</span>
             </Link>
           )}
         </div>

@@ -2,6 +2,7 @@
   "ci": {
     "collect": {
       "startServerCommand": "pnpm preview --port 4173",
+      "startServerReadyPattern": "Local:|ready|listening",
       "url": [
         "http://localhost:4173/",
         "http://localhost:4173/nft/nft_1"

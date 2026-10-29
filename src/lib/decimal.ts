@@ -31,7 +31,7 @@ export function parseDecimalToBigInt(value: string | number): bigint {
 export function formatBigIntToDecimal(
   value: bigint,
   minDecimals = 4,
-  maxDecimals = 4,
+  maxDecimals = 18,
 ): string {
   const isNegative = value < 0n
   const absValue = isNegative ? -value : value
@@ -41,6 +41,11 @@ export function formatBigIntToDecimal(
 
   // Trunca para maxDecimals
   let truncated = fractionalPart.slice(0, maxDecimals)
+
+  // Remove zeros extras à direita que excedam minDecimals para manter exatidão
+  while (truncated.length > minDecimals && truncated.endsWith('0')) {
+    truncated = truncated.slice(0, -1)
+  }
 
   // Assegura pelo menos minDecimals
   if (truncated.length < minDecimals) {

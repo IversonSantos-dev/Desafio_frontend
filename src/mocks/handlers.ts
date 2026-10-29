@@ -880,6 +880,15 @@ export const handlers = [
       mockDb.commitOrder(orderId, userId!)
     }
 
+    // Cenário MSW: Simulação de perda/timeout da resposta após criação do pedido no servidor
+    if (mockDb.getScenario().simulateTimeoutAfterOrderCreation) {
+      mockDb.updateScenario({ simulateTimeoutAfterOrderCreation: false })
+      return HttpResponse.json(
+        { message: 'Timeout de rede: tempo limite de resposta esgotado após criação na rede.' },
+        { status: 504 },
+      )
+    }
+
     return HttpResponse.json(order, { status: 201 })
   }),
 

@@ -15,7 +15,7 @@ import {
   User as UserIcon,
 } from 'lucide-react'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
@@ -91,7 +91,7 @@ function ProfileComponent() {
     register: registerProfile,
     handleSubmit: handleSubmitProfile,
     setValue: setProfileValue,
-    watch: watchProfile,
+    control: controlProfile,
     formState: { errors: profileErrors },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileDataSchema),
@@ -102,7 +102,8 @@ function ProfileComponent() {
     },
   })
 
-  const currentAvatar = watchProfile('avatar') || user?.avatar || ''
+  const watchedAvatar = useWatch({ control: controlProfile, name: 'avatar' })
+  const currentAvatar = watchedAvatar || user?.avatar || ''
 
   // Formulário de alteração de senha
   const {

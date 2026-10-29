@@ -8,7 +8,7 @@ import {
   Plus,
   Shield,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -133,12 +133,16 @@ function CheckoutComponent() {
   const activeWallet = wallets.find((w) => w.id === selectedWalletId) || primaryWallet
   const effectiveWalletId = activeWallet?.id || ''
   const items = cart?.items || []
+  const itemsRef = useRef(items)
+  useEffect(() => {
+    itemsRef.current = items
+  })
 
   // Alerta de alteração de preço em tempo real via Socket.IO
   useEffect(() => {
     if (lastEvent?.startsWith('nft.updated:')) {
       const updatedNftId = lastEvent.split(':')[1]
-      const isInCart = items.some((i) => i.nftId === updatedNftId)
+      const isInCart = itemsRef.current.some((i) => i.nftId === updatedNftId)
       if (isInCart) {
         setHasPriceChangedAlert(true)
         toast.warning(

@@ -125,7 +125,7 @@ export function ScenarioToolbar() {
   return (
     <aside
       aria-label="Painel de controle de cenários e testes"
-      className="fixed bottom-4 left-4 z-50"
+      className="fixed bottom-20 left-4 z-50 md:bottom-4"
     >
       {/* Botão Gatilho */}
       {!isOpen && (

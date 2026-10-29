@@ -18,6 +18,7 @@ export interface ScenarioConfig {
   forceOrderFail: boolean
   simulatePendingOrder?: boolean
   sessionExpired?: boolean
+  simulateTimeoutAfterOrderCreation?: boolean
 }
 
 export interface MockDatabaseState {
@@ -61,6 +62,7 @@ function getInitialState(): MockDatabaseState {
       forceOrderFail: false,
       simulatePendingOrder: false,
       sessionExpired: false,
+      simulateTimeoutAfterOrderCreation: false,
     },
   }
 }

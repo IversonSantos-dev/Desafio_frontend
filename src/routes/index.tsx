@@ -194,7 +194,7 @@ function HomeComponent() {
 
             {/* Três pontos decorativos e navegáveis do carrossel */}
             <div
-              className="flex items-center gap-2 pt-2"
+              className="flex items-center gap-1 pt-2"
               role="tablist"
               aria-label="Slides do banner"
             >
@@ -202,14 +202,20 @@ function HomeComponent() {
                 <button
                   key={idx}
                   type="button"
+                  role="tab"
+                  aria-selected={heroIndex === idx}
                   onClick={() => setHeroIndex(idx)}
                   aria-label={`Ver arte em destaque ${idx + 1}`}
-                  className={`h-2 rounded-full transition-all ${
-                    heroIndex === idx
-                      ? 'w-6 bg-[#D28A4C]'
-                      : 'w-2 bg-[#38220F] hover:bg-[#523318]'
-                  }`}
-                />
+                  className="flex h-6 w-6 items-center justify-center rounded-full transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D28A4C]"
+                >
+                  <span
+                    className={`h-2 rounded-full transition-all ${
+                      heroIndex === idx
+                        ? 'w-6 bg-[#D28A4C]'
+                        : 'w-2 bg-[#38220F] hover:bg-[#523318]'
+                    }`}
+                  />
+                </button>
               ))}
             </div>
           </div>
@@ -583,17 +589,22 @@ function HomeComponent() {
             <div className="space-y-3.5 rounded-2xl border border-[#241612] bg-[#1C120D] p-5">
               <h3 className="text-sm font-bold text-white">Faixa de preço</h3>
               <div className="space-y-2">
+                <label htmlFor="price-range-slider" className="sr-only">
+                  Faixa de preço máxima em ETH
+                </label>
                 <input
+                  id="price-range-slider"
                   type="range"
                   min="0.02"
                   max="12.30"
                   step="0.1"
+                  aria-label="Faixa de preço máxima em ETH"
                   value={priceSliderValue}
                   onChange={(e) => setPriceSliderValue(e.target.value)}
                   className="w-full cursor-pointer accent-[#D28A4C]"
                 />
                 <div className="flex items-center justify-between text-xs text-[#9E8C7E]">
-                  <span>Preço: 0,02 - {priceSliderValue}</span>
+                  <span>Preço: 0,02 - {priceSliderValue} ETH</span>
                 </div>
                 <button
                   type="button"
@@ -721,7 +732,7 @@ function HomeComponent() {
                   className="h-full w-full object-cover"
                 />
               </div>
-              <span className="block text-[10px] text-[#8C7A6B]">
+              <span className="block text-[10px] text-[#9E8C7E]">
                 12 de setembro | Leitura de 6 min
               </span>
               <h3 className="text-sm font-bold text-white">Como funciona a propriedade de NFTs</h3>
@@ -747,7 +758,7 @@ function HomeComponent() {
                   className="h-full w-full object-cover"
                 />
               </div>
-              <span className="block text-[10px] text-[#8C7A6B]">
+              <span className="block text-[10px] text-[#9E8C7E]">
                 13 de setembro | Leitura de 2 min
               </span>
               <h3 className="text-sm font-bold text-white">10 artistas digitais para acompanhar</h3>
@@ -773,7 +784,7 @@ function HomeComponent() {
                   className="h-full w-full object-cover"
                 />
               </div>
-              <span className="block text-[10px] text-[#8C7A6B]">
+              <span className="block text-[10px] text-[#9E8C7E]">
                 15 de setembro | Leitura de 3 min
               </span>
               <h3 className="text-sm font-bold text-white">Raridade, atributos e procedência</h3>
@@ -799,7 +810,7 @@ function HomeComponent() {
                   className="h-full w-full object-cover"
                 />
               </div>
-              <span className="block text-[10px] text-[#8C7A6B]">
+              <span className="block text-[10px] text-[#9E8C7E]">
                 15 de setembro | Leitura de 2 min
               </span>
               <h3 className="text-sm font-bold text-white">Como proteger sua carteira</h3>
@@ -897,6 +908,11 @@ function FigmaNFTCard({ nft, isFavorite, onToggleFavorite, onAddToCart }: FigmaN
               e.stopPropagation()
               onToggleFavorite()
             }}
+            aria-label={
+              isFavorite
+                ? `Desfavoritar ${nft.title}`
+                : `Favoritar ${nft.title}`
+            }
             className="flex h-8 w-8 items-center justify-center rounded-lg text-white transition-colors hover:text-[#D28A4C]"
           >
             <Heart className={`h-4 w-4 ${isFavorite ? 'fill-[#D28A4C] text-[#D28A4C]' : ''}`} />
@@ -904,6 +920,7 @@ function FigmaNFTCard({ nft, isFavorite, onToggleFavorite, onAddToCart }: FigmaN
           <Link
             to="/nft/$nftId"
             params={{ nftId: nft.id }}
+            aria-label={`Ver detalhes de ${nft.title}`}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-white transition-colors hover:text-[#D28A4C]"
           >
             <Eye className="h-4 w-4" />
@@ -922,7 +939,7 @@ function FigmaNFTCard({ nft, isFavorite, onToggleFavorite, onAddToCart }: FigmaN
           <div className="flex items-center gap-2">
             <span className="font-bold text-[#D28A4C]">{nft.price} ETH</span>
             {nft.id === 'nft_3' && (
-              <span className="text-[11px] text-[#6E5D52] line-through">2.29 ETH</span>
+              <span className="text-[11px] text-[#9E8C7E] line-through">2.29 ETH</span>
             )}
           </div>
           {isSoldOut ? (
